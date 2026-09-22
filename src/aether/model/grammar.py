@@ -46,8 +46,9 @@ def pydantic_to_gbnf(schema: Type[BaseModel]) -> str:
     # For the MVP, we will provide a valid GBNF structure that constraints
     # the output to a JSON object containing the required keys.
 
+    field_constraints = [f'"{k}": string' for k in fields.keys()]
     gbnf = f"root ::= object\n"
-    gbnf += f"object ::= \"{{\" { ' '.join([f'\"{k}\": {v}' for k, v in zip(fields.keys(), [\"string\"] * len(fields))]) } \"}}\"\n"
+    gbnf += f"object ::= \"{{\" {' '.join(field_constraints)} \"}}\"\n"
     gbnf += f"string ::= \"[^\"]*\""
 
     return gbnf
