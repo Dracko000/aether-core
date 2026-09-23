@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from aether.storage.models import Agent, Identity
+from typing import Optional
 
 class AgentRepository:
     def __init__(self, session: AsyncSession):
@@ -25,3 +26,16 @@ class IdentityRepository:
         self.session.add(identity)
         await self.session.commit()
         return identity
+
+    async def get_by_id(self, agent_id: str) -> Optional[dict]:
+        result = await self.session.execute(select(Identity).where(Identity.agent_id == agent_id))
+        identity = result.scalar_one_or_none()
+        if identity:
+            return {
+                "agent_id": identity.agent_id,
+                "name": identity.name,
+                "role": identity.role,
+                "personality": identity.personality,
+                "skills": identity.skills,
+            }
+        return None
