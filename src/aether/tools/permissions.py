@@ -29,6 +29,11 @@ class PermissionManager:
         return row if row is not None else False
 
     async def grant_permission(self, agent_id: str, tool_name: str):
+        # Check if permission exists
+        exists = await self.check_permission(agent_id, tool_name)
+        if exists:
+            return
+
         stmt = insert(permissions_table).values(
             agent_id=agent_id,
             tool_name=tool_name,
