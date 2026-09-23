@@ -20,13 +20,13 @@ class PermissionManager:
         self.session = session
 
     async def check_permission(self, agent_id: str, tool_name: str) -> bool:
-        stmt = select(permissions_table).where(
+        stmt = select(permissions_table.c.allowed).where(
             permissions_table.c.agent_id == agent_id,
             permissions_table.c.tool_name == tool_name
         )
         result = await self.session.execute(stmt)
         row = result.scalar_one_or_none()
-        return row.allowed if row else False
+        return row if row is not None else False
 
     async def grant_permission(self, agent_id: str, tool_name: str):
         stmt = insert(permissions_table).values(
