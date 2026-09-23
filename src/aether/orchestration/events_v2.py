@@ -1,0 +1,18 @@
+from dataclasses import dataclass, field
+from typing import Dict, Any, Optional
+from datetime import datetime
+import uuid
+
+@dataclass
+class AgentEvent:
+    """
+    A system event that can trigger an agent to wake or change state.
+    """
+    event_type: str
+    agent_id: str
+    payload: Dict[str, Any]
+    priority: int = 10 # Lower is higher
+    source: str = "system"
+    event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: float = field(default_factory=lambda: datetime.utcnow().timestamp())
+    scheduled_at: Optional[float] = None

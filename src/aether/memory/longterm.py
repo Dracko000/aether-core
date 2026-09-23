@@ -1,37 +1,30 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import Table, Column, String, Text, Float, MetaData
 from sqlalchemy import select, insert
+from aether.storage.models import LongTermMemory
 
-metadata = MetaData()
-
-longterm_table = Table(
-    "longterm_memories",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column("agent_id", String, index=True),
-    Column("insight", Text),
-    Column("weight", Float),
-)
-
-class LongTermMemory:
+class LongTermMemoryManager:
     """
     L5 Long-Term Memory: Core identity and highly distilled insights.
+    Now uses the centralized SQLAlchemy model.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def add(self, agent_id: str, insight: str, weight: float):
-        import uuid
-        stmt = insert(longterm_table).values(
-            id=str(uuid.uuid4()),
+    async def add(self, agent_id: str, fact: str, importance: float):
+        from datetime import datetime
+        # Create a LongTermMemory object
+        memory = LongTermMemory(
             agent_id=agent_id,
-            insight=insight,
-            weight=weight
+            fact=fact,
+            importance=importance,
+            timestamp=datetime.utcnow().timestamp()
         )
-        await self.session.execute(stmt)
+        self.session.add(memory)
         await self.session.commit()
 
     async def get_core_insights(self, agent_id: str):
-        stmt = select(longterm_table).where(longterm_table.c.agent_id == agent_id)
+        # Using SQLAlchemy select
+        from sqlalchemy import select
+        stmt = select(LongTermMemory).where(LongTermMemory.agent_id == agent_id)
         result = await self.session.execute(stmt)
-        return result.mappings().all()
+        return result.scalars().all()

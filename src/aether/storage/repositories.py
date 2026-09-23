@@ -7,8 +7,8 @@ class AgentRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, agent_id: str):
-        agent = Agent(agent_id=agent_id)
+    async def create(self, agent_id: str, model_id: str = "default-model"):
+        agent = Agent(agent_id=agent_id, model_id=model_id)
         self.session.add(agent)
         await self.session.commit()
         return agent

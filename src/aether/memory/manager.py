@@ -2,12 +2,13 @@ from typing import List, Dict, Any, Optional
 from aether.memory.vector_store import LocalVectorStore
 from aether.memory.embeddings import EmbeddingModel
 from aether.memory.working import WorkingMemory
-from aether.memory.episodic import EpisodicMemory
+from aether.memory.episodic import EpisodicMemoryManager
 from aether.memory.semantic import SemanticMemory
 from aether.memory.procedural import ProceduralMemory
-from aether.memory.longterm import LongTermMemory
+from aether.memory.longterm import LongTermMemoryManager
 from aether.memory.extraction import MemoryExtractor
 from aether.memory.importance import ImportanceScorer
+from aether.storage.repositories_experience import ExperienceGraphRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 class MemoryManager:
@@ -22,10 +23,11 @@ class MemoryManager:
 
         # Initialize tiers
         self.l1 = WorkingMemory()
-        self.l2 = EpisodicMemory(session)
+        self.l2 = EpisodicMemoryManager(session)
         self.l3 = SemanticMemory(session)
         self.l4 = ProceduralMemory(session)
-        self.l5 = LongTermMemory(session)
+        self.l5 = LongTermMemoryManager(session)
+        self.graph = ExperienceGraphRepository(session)
 
         self.extractor = MemoryExtractor(model_manager)
         self.scorer = ImportanceScorer()
@@ -49,9 +51,35 @@ class MemoryManager:
             context.append({"type": "semantic", "content": meta.get("content", ""), "score": score})
 
         for entry in episodic:
-            context.append({"type": "episodic", "content": entry["event"], "score": 1.0})
+            # entry is now a model instance, not a dict
+            context.append({"type": "episodic", "content": entry.event, "score": 1.0})
 
         return context
+
+    async def retrieve_associative(self, agent_id: str, start_node_id: str, depth: int = 1) -> List[Dict[str, Any]]:
+        """
+        Traverse the experience graph to find related memories.
+        """
+        results = []
+        visited = set()
+        queue = [(start_node_id, 0)]
+
+        while queue:
+            node_id, current_depth = queue.pop(0)
+            if node_id in visited or current_depth > depth:
+                continue
+
+            visited.add(node_id)
+            node = await self.graph.get_node(node_id)
+            if node:
+                results.append({"type": "experience", "content": node.content, "id": node.node_id})
+
+                # Add neighbors to queue
+                neighbors = await self.graph.get_neighbors(node_id)
+                for neighbor in neighbors:
+                    queue.append((neighbor.node_id, current_depth + 1))
+
+        return results
 
     async def consolidate(self, agent_id: str, experience: Dict[str, Any]):
         """
@@ -63,7 +91,6 @@ class MemoryManager:
         # 2. Process each extracted fact
         for fact in extraction.facts:
             # Calculate importance
-            # In MVP, we use a simple recurrence count of 1
             importance = self.scorer.calculate(extraction.importance_score, recurrence=1, goal_alignment=True)
 
             # 3. Tier Assignment

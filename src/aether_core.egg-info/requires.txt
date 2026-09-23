@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+pydantic-settings
+typer
+httpx
+aiosqlite
+
+[dev]
+pytest
+pytest-asyncio
+black
+mypy

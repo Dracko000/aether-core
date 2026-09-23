@@ -1,45 +1,31 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, insert
-from aether.storage.models import Base
-from sqlalchemy import Table, Column, String, Text, Float, DateTime, MetaData
-from datetime import datetime
+from sqlalchemy import select
+from aether.storage.models import EpisodicMemory
 
-metadata = MetaData()
-
-# Episodic Memory Table
-episodic_table = Table(
-    "episodic_memories",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column("agent_id", String, index=True),
-    Column("timestamp", DateTime, default=datetime.utcnow),
-    Column("event", Text),
-    Column("context", Text),
-    Column("result", Text),
-    Column("lesson", Text),
-)
-
-class EpisodicMemory:
+class EpisodicMemoryManager:
     """
     L2 Episodic Memory: Log of raw experiences.
+    Now uses the centralized SQLAlchemy model.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def add(self, agent_id: str, event: str, context: str, result: str, lesson: str = None):
-        import uuid
-        stmt = insert(episodic_table).values(
-            id=str(uuid.uuid4()),
+        from datetime import datetime
+        # Create an EpisodicMemory object
+        memory = EpisodicMemory(
             agent_id=agent_id,
+            timestamp=datetime.utcnow().timestamp(),
             event=event,
             context=context,
             result=result,
             lesson=lesson
         )
-        await self.session.execute(stmt)
+        self.session.add(memory)
         await self.session.commit()
 
     async def get_recent(self, agent_id: str, limit: int = 10):
-        stmt = select(episodic_table).where(episodic_table.c.agent_id == agent_id).order_by(episodic_table.c.timestamp.desc()).limit(limit)
+        from sqlalchemy import select
+        stmt = select(EpisodicMemory).where(EpisodicMemory.agent_id == agent_id).order_by(EpisodicMemory.timestamp.desc()).limit(limit)
         result = await self.session.execute(stmt)
-        return result.mappings().all()
+        return result.scalars().all()
