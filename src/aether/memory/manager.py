@@ -6,16 +6,19 @@ from aether.memory.episodic import EpisodicMemory
 from aether.memory.semantic import SemanticMemory
 from aether.memory.procedural import ProceduralMemory
 from aether.memory.longterm import LongTermMemory
+from aether.memory.extraction import MemoryExtractor
+from aether.memory.importance import ImportanceScorer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 class MemoryManager:
     """
-    Orchestrates retrieval across the five memory tiers.
+    Orchestrates retrieval and consolidation across the five memory tiers.
     """
-    def __init__(self, session: AsyncSession, vector_store: LocalVectorStore):
+    def __init__(self, session: AsyncSession, vector_store: LocalVectorStore, model_manager=None):
         self.session = session
         self.vector_store = vector_store
         self.embeddings = EmbeddingModel()
+        self.model_manager = model_manager
 
         # Initialize tiers
         self.l1 = WorkingMemory()
@@ -24,12 +27,14 @@ class MemoryManager:
         self.l4 = ProceduralMemory(session)
         self.l5 = LongTermMemory(session)
 
+        self.extractor = MemoryExtractor(model_manager)
+        self.scorer = ImportanceScorer()
+
     async def retrieve(self, agent_id: str, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         # 1. Generate embedding for the query
         query_vec = self.embeddings.embed(query)
 
         # 2. Vector search across semantic/longterm memories
-        # In this MVP, metadata in vector_store tells us which tier it belongs to
         vector_results = await self.vector_store.search(query_vec, top_k=top_k)
 
         # 3. Filter vector results for this specific agent
@@ -38,7 +43,7 @@ class MemoryManager:
         # 4. Combine with recent episodic memories (L2)
         episodic = await self.l2.get_recent(agent_id, limit=5)
 
-        # 5. Assembly: Combine and return as a list of context snippets
+        # 5. Assembly
         context = []
         for score, meta in agent_memories:
             context.append({"type": "semantic", "content": meta.get("content", ""), "score": score})
@@ -48,9 +53,34 @@ class MemoryManager:
 
         return context
 
-    async def add_to_semantic(self, agent_id: str, fact: str, importance: float):
-        # Save to SQLite
-        await self.l3.add(agent_id, fact, importance)
-        # Save to Vector Store for retrieval
-        vec = self.embeddings.embed(fact)
-        await self.vector_store.add(vec, {"agent_id": agent_id, "content": fact, "tier": "L3"}, f"{agent_id}_sem_{hash(fact)}")
+    async def consolidate(self, agent_id: str, experience: Dict[str, Any]):
+        """
+        The Consolidation Pipeline: Experience -> Extraction -> Score -> Tiered Storage.
+        """
+        # 1. Extract facts and lessons
+        extraction = await self.extractor.extract(agent_id, experience)
+
+        # 2. Process each extracted fact
+        for fact in extraction.facts:
+            # Calculate importance
+            # In MVP, we use a simple recurrence count of 1
+            importance = self.scorer.calculate(extraction.importance_score, recurrence=1, goal_alignment=True)
+
+            # 3. Tier Assignment
+            if importance > 0.9:
+                await self.l5.add(agent_id, fact, importance)
+            elif importance > 0.6:
+                await self.l3.add(agent_id, fact, importance)
+
+            # Always add to vector store for semantic retrieval
+            vec = self.embeddings.embed(fact)
+            await self.vector_store.add(vec, {"agent_id": agent_id, "content": fact, "tier": "semantic"}, f"{agent_id}_sem_{hash(fact)}")
+
+        # Also store the raw experience in Episodic Memory (L2)
+        await self.l2.add(
+            agent_id,
+            experience.get("event", ""),
+            experience.get("context", ""),
+            experience.get("result", ""),
+            extraction.lessons[0] if extraction.lessons else None
+        )
