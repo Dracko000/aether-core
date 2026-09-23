@@ -18,7 +18,7 @@ def register_http_tools():
     registry.register(
         ToolSchema(
             name="http.get",
-            description="Fetch content from a URL",
+            description="Perform an HTTP GET request to retrieve content from a URL",
             parameters={"url": "string"},
             risk_level="LOW"
         ),

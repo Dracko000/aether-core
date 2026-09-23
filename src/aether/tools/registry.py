@@ -9,7 +9,7 @@ class ToolSchema(BaseModel):
 
 class ToolRegistry:
     """
-    Central registry for all available tools.
+    Central repository for tool definitions and their associated executors.
     """
     def __init__(self):
         self._tools: Dict[str, ToolSchema] = {}

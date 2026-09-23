@@ -2,8 +2,8 @@ from typing import Dict, Any
 
 class ImportanceScorer:
     """
-    Calculates a final importance score for a memory based on
-    recurrence, goal alignment, and model-assigned weight.
+    Computes the priority score of a memory based on recurrence,
+    alignment with active goals, and model-assigned weights.
     """
     @staticmethod
     def calculate(base_score: float, recurrence: int, goal_alignment: bool) -> float:

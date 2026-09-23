@@ -5,7 +5,7 @@ from aether.storage.models_experience import ExperienceNodeModel, ExperienceEdge
 
 class ExperienceGraphRepository:
     """
-    Handles graph operations for the Experience Graph.
+    Manages graph operations for the Experience Graph.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -34,7 +34,7 @@ class ExperienceGraphRepository:
         await self.session.commit()
 
     async def get_neighbors(self, node_id: str):
-        """Find all experiences linked to the given node."""
+        """Retrieves all experience nodes linked to the specified node."""
         stmt = select(ExperienceNodeModel).join(
             ExperienceEdgeModel,
             (ExperienceEdgeModel.target_node_id == ExperienceNodeModel.node_id) &
@@ -53,13 +53,13 @@ class ExperienceGraphRepository:
         return node
 
     def deserialize_embedding(self, node: ExperienceNodeModel):
-        """Helper to deserialize the embedding of a node."""
+        """Deserializes the embedding vector of a node."""
         if node and node.embedding and isinstance(node.embedding, str):
             return json.loads(node.embedding)
         return node.embedding if node else None
 
     async def find_by_content(self, agent_id: str, query: str):
-        """Simple keyword-based search for nodes (placeholder for vector search)."""
+        """Performs a keyword-based search for experience nodes."""
         stmt = select(ExperienceNodeModel).where(
             ExperienceNodeModel.agent_id == agent_id,
             ExperienceNodeModel.content.contains(query)

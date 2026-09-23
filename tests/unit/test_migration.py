@@ -15,26 +15,26 @@ async def test_model_migration_flow():
         agent_repo = AgentRepository(session)
         await agent_repo.create(agent_id, model_id="llama-7b")
     
-    # Setup Capability Matrix
+    # Capability matrix initialization
     matrix = CapabilityMatrix()
     matrix.register_model(ModelCapabilities(
-        model_id="llama-7b", 
-        max_context=4096, 
+        model_id="llama-7b",
+        max_context=4096,
         reasoning_level=1
     ))
     matrix.register_model(ModelCapabilities(
-        model_id="llama-70b", 
-        max_context=32768, 
+        model_id="llama-70b",
+        max_context=32768,
         reasoning_level=3
     ))
-    
+
     runtime = AgentRuntime()
     migration_mgr = ModelMigrationManager(runtime, matrix)
-    
-    # Migrate agent from 7b to 70b
+
+    # Execute agent migration from 7b to 70b
     success = await migration_mgr.migrate_agent(agent_id, "llama-70b")
     assert success is True
-    
+
     # Verify persistence
     async with AsyncSessionLocal() as session:
         agent = await agent_repo.get(agent_id)

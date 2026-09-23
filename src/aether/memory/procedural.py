@@ -15,7 +15,7 @@ procedural_table = Table(
 
 class ProceduralMemory:
     """
-    L4 Procedural Memory: Knowledge about how to perform tasks.
+    L4 Procedural Memory: Stores operational knowledge and task execution procedures.
     """
     def __init__(self, session: AsyncSession):
         self.session = session

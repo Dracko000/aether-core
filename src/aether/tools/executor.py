@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 class ToolExecutor:
     """
-    Coordinates tool selection, permission checking, and execution.
+    Coordinates tool selection, authorization, and execution within the cognitive architecture.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -31,7 +31,7 @@ class ToolExecutor:
 
 class RustSandboxClient:
     """
-    Client for communicating with the Rust-based secure sandbox.
+    Interface for interacting with the secure execution environment.
     """
     def __init__(self, url: str = "http://127.0.0.1:9000"):
         self.url = url
@@ -43,9 +43,8 @@ class RustSandboxClient:
             "timeout_ms": 5000
         }
         async with httpx.AsyncClient() as client:
-            # Note: Using raw TCP socket for the current sandbox.rs implementation
-            # In a final version, we'd use a proper HTTP server or gRPC.
-            # For the MVP, we'll use a simple TCP request.
+            # Implementation detail: Current version utilizes a TCP socket for the sandbox interface.
+            # Future iterations will transition to a formal HTTP or gRPC API.
             import socket
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect(("127.0.0.1", 9000))

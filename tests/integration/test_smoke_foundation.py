@@ -13,10 +13,11 @@ class PlanSchema(BaseModel):
 
 @pytest.mark.asyncio
 async def test_full_stack_mock_flow():
-    # 1. Setup
+    """Verify end-to-end flow from API agent creation to cognitive request processing using mock adapters."""
+    # 1. Environment Setup
     await init_db()
 
-    # Clear DB to ensure clean state
+    # Ensure clean state
     async with AsyncSessionLocal() as session:
         from aether.storage.models import Agent, Identity
         from sqlalchemy import delete
@@ -27,7 +28,7 @@ async def test_full_stack_mock_flow():
     mock_adapter = MockAdapter()
     manager = ModelManager(mock_adapter)
 
-    # 2. Create Agent via API
+    # 2. Agent Provisioning via API
     client = TestClient(app)
     agent_payload = {
         "agent_id": "aria_test",
@@ -39,23 +40,22 @@ async def test_full_stack_mock_flow():
     response = client.post("/agents/", json=agent_payload)
     assert response.status_code == 200
 
-    # 3. Simulate a Cognitive Request (Runtime -> Manager -> Adapter)
-    # We want the agent to "Plan" something
+    # 3. Cognitive Request Simulation
     async def plan_call():
-        # Simulate what the Cognitive Engine would do:
+        # Simulate cognitive engine's request for structured planning
         return await mock_adapter.structured([], PlanSchema)
 
     result = await manager.request(1, plan_call)
 
-    # Verify structured output
+    # Verify structured output validity
     assert isinstance(result, PlanSchema)
-    # MockAdapter returns "mock_value" for all strings
-    assert result.steps == ["mock_value"] # Based on MockAdapter implementation
+    assert result.steps == ["mock_value"] # Verified against MockAdapter implementation
 
     await manager.shutdown()
 
 @pytest.mark.asyncio
 async def test_priority_queue_stress():
+    """Verify that the ModelManager processes requests according to assigned priority."""
     adapter = MockAdapter()
     manager = ModelManager(adapter)
 
@@ -65,14 +65,13 @@ async def test_priority_queue_stress():
         processed_order.append(name)
         return name
 
-    # Submit in reverse order of priority
-    # Prio 10 (Low), Prio 5 (Med), Prio 1 (High)
+    # Submit requests in reverse priority order: Low (10), Medium (5), High (1)
     t1 = asyncio.create_task(manager.request(10, lambda: slow_task("low")))
     t2 = asyncio.create_task(manager.request(5, lambda: slow_task("med")))
     t3 = asyncio.create_task(manager.request(1, lambda: slow_task("high")))
 
     await asyncio.gather(t1, t2, t3)
 
-    # Should be high -> med -> low
+    # Verify priority-based execution order
     assert processed_order == ["high", "med", "low"]
     await manager.shutdown()

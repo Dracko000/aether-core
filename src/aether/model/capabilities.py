@@ -29,7 +29,7 @@ class CapabilityMatrix:
 
     def find_best_model(self, required_capabilities: Dict[str, Any]) -> Optional[str]:
         """
-        Find the most capable model that meets the minimum requirements.
+        Identifies the most capable model that satisfies the minimum required capabilities.
         """
         best_model = None
         highest_reasoning = -1
@@ -37,15 +37,17 @@ class CapabilityMatrix:
         for model_id, caps in self._matrix.items():
             meets_reqs = True
             for req_attr, req_val in required_capabilities.items():
+                # Ensure context and reasoning meet or exceed required thresholds
+                if req_attr == "max_context" and caps.max_context >= req_val:
+                    continue
+                if req_attr == "reasoning_level" and caps.reasoning_level >= req_val:
+                    continue
                 if getattr(caps, req_attr, None) != req_val:
-                    # For context, we check if it's at least the required size
-                    if req_attr == "max_context" and caps.max_context >= req_val:
-                        continue
                     meets_reqs = False
                     break
-            
+
             if meets_reqs and caps.reasoning_level > highest_reasoning:
                 highest_reasoning = caps.reasoning_level
                 best_model = model_id
-        
+
         return best_model

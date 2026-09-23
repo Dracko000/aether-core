@@ -5,7 +5,7 @@ from aether.storage.models_messages import AgentMessageModel
 
 class MessageRepository:
     """
-    Handles persistence of agent-to-agent messages.
+    Manages the persistence of agent-to-agent communication.
     """
     def __init__(self, session: AsyncSession):
         self.session = session

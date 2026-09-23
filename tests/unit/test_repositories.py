@@ -5,12 +5,11 @@ from aether.storage.repositories import AgentRepository, IdentityRepository
 
 @pytest.mark.asyncio
 async def test_agent_lifecycle():
-    # Ensure we start with a clean DB for the test
-    # In a real project, we'd use a separate test DB file
+    # Ensure database initialization
     await init_db()
 
     async with AsyncSessionLocal() as session:
-        # Clear the table first to avoid IntegrityError
+        # Prevent IntegrityError by clearing agent records
         from aether.storage.models import Agent
         from sqlalchemy import delete
         await session.execute(delete(Agent))

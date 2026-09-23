@@ -9,7 +9,7 @@ from aether.storage.repositories_lifecycle import LifecycleRepository
 @pytest.mark.asyncio
 async def test_lifecycle_persistence():
     """
-    Verify that state transitions are correctly recorded in the database.
+    Verify that state transitions are correctly persisted in the database.
     """
     agent_id = "lifecycle_test_agent"
 
@@ -29,7 +29,7 @@ async def test_lifecycle_persistence():
 
     runtime = AgentRuntime()
 
-    # 1. Wake the agent (IDLE -> AWAKENED)
+    # 1. Transition from IDLE to AWAKENED
     await runtime.wake(agent_id)
     assert runtime.active_agents[agent_id]["state"] == AgentState.AWAKENED
 
@@ -42,7 +42,7 @@ async def test_lifecycle_persistence():
         lifecycle_repo = LifecycleRepository(session)
         history = await lifecycle_repo.get_history(agent_id)
 
-        # Should have at least two events: AWAKENED and THINKING
+        # Verify record of state transitions
         assert len(history) >= 2
         assert history[-1].to_state == "THINKING"
         assert history[-1].reason == "starting_reasoning"
@@ -50,7 +50,7 @@ async def test_lifecycle_persistence():
 @pytest.mark.asyncio
 async def test_invalid_transition():
     """
-    Verify that invalid state transitions are blocked.
+    Verify that prohibited state transitions are blocked.
     """
     agent_id = "invalid_trans_agent"
 
@@ -60,10 +60,10 @@ async def test_invalid_transition():
         await agent_repo.create(agent_id)
 
         runtime = AgentRuntime()
-        # Manually inject into active_agents for testing
+        # Inject agent into active_agents for state validation testing
         runtime.active_agents[agent_id] = {"state": AgentState.CREATED}
 
-        # CREATED -> THINKING is NOT allowed (must go through INITIALIZED -> IDLE -> AWAKENED)
+        # CREATED -> THINKING is prohibited (requires INITIALIZED -> IDLE -> AWAKENED)
         success = await runtime.transition_to(session, agent_id, AgentState.THINKING, "illegal_jump")
         assert success is False
         assert runtime.active_agents[agent_id]["state"] == AgentState.CREATED
@@ -71,7 +71,7 @@ async def test_invalid_transition():
 @pytest.mark.asyncio
 async def test_sleep_lifecycle_flow():
     """
-    Verify that sleeping correctly updates the database and removes agent from runtime.
+    Verify that the sleep operation updates the database and removes the agent from runtime.
     """
     agent_id = "sleep_test_agent"
 
@@ -85,9 +85,9 @@ async def test_sleep_lifecycle_flow():
 
         await runtime.sleep(agent_id)
 
-        # Verify removed from runtime
+        # Verify removal from active runtime
         assert agent_id not in runtime.active_agents
 
-        # Verify DB status is SLEEPING
+        # Verify persistence of SLEEPING status
         agent = await agent_repo.get(agent_id)
         assert agent.status == AgentState.SLEEPING.name

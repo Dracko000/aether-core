@@ -5,7 +5,7 @@ from datetime import datetime
 
 class AgentGoalModel(Base):
     """
-    Persistent storage for agent goals and long-term objectives.
+    Persistent storage for agent goals and objectives.
     """
     __tablename__ = "agent_goals"
 

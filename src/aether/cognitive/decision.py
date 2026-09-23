@@ -10,7 +10,7 @@ class Decision(BaseModel):
 
 class DecisionEngine:
     """
-    Logic for turning reasoning traces into concrete decisions.
+    Translates reasoning traces into concrete executive decisions.
     """
     async def decide(self, trace: List[Any]) -> Decision:
         # In a real implementation, this would use the model to analyze the trace

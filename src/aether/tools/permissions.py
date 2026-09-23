@@ -14,7 +14,7 @@ permissions_table = Table(
 
 class PermissionManager:
     """
-    Enforces tool access control outside the model.
+    Manages and enforces tool access control for cognitive agents.
     """
     def __init__(self, session: AsyncSession):
         self.session = session

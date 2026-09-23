@@ -13,8 +13,8 @@ class Event:
 
 class EventBus:
     """
-    A lightweight asynchronous event bus for internal system communication.
-    Allows decoupled components to react to state changes.
+    Asynchronous event bus for internal system communication.
+    Facilitates decoupled component interaction via state change notifications.
     """
     def __init__(self):
         self._subscribers: Dict[str, List[Callable]] = {}

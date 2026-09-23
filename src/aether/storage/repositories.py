@@ -17,6 +17,11 @@ class AgentRepository:
         result = await self.session.execute(select(Agent).where(Agent.agent_id == agent_id))
         return result.scalar_one_or_none()
 
+    async def get_all_agents(self):
+        """Returns all agents in the system."""
+        result = await self.session.execute(select(Agent))
+        return result.scalars().all()
+
 class IdentityRepository:
     def __init__(self, session: AsyncSession):
         self.session = session

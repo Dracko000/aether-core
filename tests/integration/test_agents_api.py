@@ -7,6 +7,7 @@ client = TestClient(app)
 
 @pytest.mark.asyncio
 async def test_create_agent_endpoint():
+    """Verify the agent creation API endpoint."""
     await init_db()
 
     payload = {

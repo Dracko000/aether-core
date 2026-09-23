@@ -10,41 +10,41 @@ from aether.orchestration.manager import OrchestrationManager
 @pytest.mark.asyncio
 async def test_runtime_load():
     """
-    Stress test: Wake up a large number of agents to check for memory leaks or OOM.
+    Evaluate runtime stability under high agent concurrency to detect resource leaks or exhaustion.
     """
     num_agents = 100
     agent_ids = [f"stress_agent_{i}" for i in range(num_agents)]
-    
+
     async with AsyncSessionLocal() as session:
         await init_db()
         agent_repo = AgentRepository(session)
         id_repo = IdentityRepository(session)
-        
+
         for aid in agent_ids:
             await agent_repo.create(aid)
             await id_repo.create(aid, f"Agent {aid}", "Worker", {}, [])
 
     runtime = AgentRuntime()
     orch_manager = OrchestrationManager(runtime)
-    
+
     start_time = time.time()
-    
-    # Wake up all agents concurrently
+
+    # Activate all agents concurrently
     tasks = [runtime.wake(aid) for aid in agent_ids]
     await asyncio.gather(*tasks)
-    
+
     end_time = time.time()
-    
+
     assert len(runtime.active_agents) == num_agents
     print(f"\nWoke up {num_agents} agents in {end_time - start_time:.2f} seconds")
 
 @pytest.mark.asyncio
 async def test_event_flood():
     """
-    Stress test: Flood the system with events to check for queue congestion.
+    Evaluate system throughput and queue stability under high event volume.
     """
     agent_id = "flood_agent"
-    
+
     async with AsyncSessionLocal() as session:
         await init_db()
         agent_repo = AgentRepository(session)
@@ -54,8 +54,8 @@ async def test_event_flood():
 
     runtime = AgentRuntime()
     orch_manager = OrchestrationManager(runtime)
-    
-    # Flood with 500 events
+
+    # Generate high volume event load
     async with AsyncSessionLocal() as session:
         from aether.storage.repositories_events import AgentEventRepository
         event_repo = AgentEventRepository(session)
@@ -67,11 +67,11 @@ async def test_event_flood():
                 payload={"tick": i},
                 source="stress_test"
             )
-    
+
     start_time = time.time()
     await orch_manager.process_wake_events()
     end_time = time.time()
-    
+
     print(f"\nProcessed 500 events in {end_time - start_time:.2f} seconds")
     assert runtime.is_agent_awake(agent_id)
 

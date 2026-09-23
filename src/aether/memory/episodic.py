@@ -4,15 +4,15 @@ from aether.storage.models import EpisodicMemory
 
 class EpisodicMemoryManager:
     """
-    L2 Episodic Memory: Log of raw experiences.
-    Now uses the centralized SQLAlchemy model.
+    L2 Episodic Memory: Maintains a chronological log of raw experiences
+    via a centralized SQLAlchemy model.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def add(self, agent_id: str, event: str, context: str, result: str, lesson: str = None):
         from datetime import datetime
-        # Create an EpisodicMemory object
+        # Persist episodic record
         memory = EpisodicMemory(
             agent_id=agent_id,
             timestamp=datetime.utcnow().timestamp(),

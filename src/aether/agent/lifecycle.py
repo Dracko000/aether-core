@@ -18,7 +18,7 @@ class AgentState(Enum):
     SLEEPING = auto()
 
 class LifecycleManager:
-    # Define valid transitions
+    # Valid state transitions within the cognitive architecture
     TRANSITIONS = {
         AgentState.CREATED: [AgentState.INITIALIZED],
         AgentState.INITIALIZED: [AgentState.IDLE],
@@ -38,4 +38,5 @@ class LifecycleManager:
 
     @classmethod
     def validate_transition(cls, current: AgentState, next_state: AgentState) -> bool:
+        """Validate if a state transition is permitted by the lifecycle matrix."""
         return next_state in cls.TRANSITIONS.get(current, [])

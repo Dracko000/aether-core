@@ -4,7 +4,7 @@ from aether.storage.models_lifecycle import LifecycleEvent
 
 class LifecycleRepository:
     """
-    Handles persistence of agent lifecycle transitions.
+    Manages the persistence of agent lifecycle state transitions.
     """
     def __init__(self, session: AsyncSession):
         self.session = session

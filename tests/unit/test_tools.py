@@ -18,21 +18,21 @@ def setup_tools():
 async def test_tool_permission_denied():
     async with AsyncSessionLocal() as session:
         executor = ToolExecutor(session)
-        # Agent "unauthorized_agent" has no permissions granted
+        # Verify access denial for agent without assigned permissions
         result = await executor.execute("unauthorized_agent", "filesystem.read", {"path": "test.txt"})
         assert "Permission denied" in result
 
 @pytest.mark.asyncio
 async def test_tool_execution_success():
-    # Use a fresh DB session
+    # Initialize session and database
     async with AsyncSessionLocal() as session:
-        await init_db() # Initialize tables
+        await init_db()
         from aether.tools.permissions import PermissionManager
         pm = PermissionManager(session)
         agent_id = "authorized_agent"
         await pm.grant_permission(agent_id, "filesystem.read")
 
-        # Create a dummy file to read
+        # Create test resource for read operation
         with open("test_read.txt", "w") as f:
             f.write("Hello Aether!")
 

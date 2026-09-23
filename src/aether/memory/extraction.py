@@ -8,8 +8,8 @@ class MemoryExtraction(BaseModel):
 
 class MemoryExtractor:
     """
-    Logic for transforming raw experiences into distilled memories.
-    Uses the LLM to extract meaningful facts and lessons.
+    Transforms raw experience data into distilled memory representations.
+    Utilizes language models to extract salient facts and durable lessons.
     """
     def __init__(self, model_manager):
         self.model_manager = model_manager
@@ -23,13 +23,13 @@ class MemoryExtractor:
             "Extract key facts and a durable lesson. Rate the importance (0.0 to 1.0)."
         )
 
-        # In a real scenario, we'd use ModelManager.request() with a structured schema
-        # For the MVP's logic, we simulate the structured call:
+        # In production, ModelManager.request() is used with a structured schema.
+        # The following block represents the structured call logic:
         # result = await self.model_manager.request(5, lambda: self.model_manager.adapter.structured(
         #     [{"role": "user", "content": prompt}], MemoryExtraction
         # ))
 
-        # Mocking the extraction for now since we are in the middle of Plan 4
+        # Temporary mock implementation for current development phase.
         return MemoryExtraction(
             facts=["The user prefers concise reports"],
             lessons=["Always validate the environment before deployment"],

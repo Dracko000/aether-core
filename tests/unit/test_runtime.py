@@ -8,7 +8,7 @@ from aether.agent.lifecycle import AgentState
 async def test_runtime_wake_sleep():
     await init_db()
 
-    # Setup: Create an agent in the DB
+    # Agent instantiation in database
     async with AsyncSessionLocal() as session:
         agent_repo = AgentRepository(session)
         id_repo = IdentityRepository(session)
@@ -19,17 +19,17 @@ async def test_runtime_wake_sleep():
 
     runtime = AgentRuntime()
 
-    # 1. Wake the agent
+    # 1. Activate agent
     identity = await runtime.wake("runtime_test_001")
     assert identity.name == "TestBot"
     assert "runtime_test_001" in runtime.active_agents
     assert runtime.active_agents["runtime_test_001"]["state"] == AgentState.AWAKENED
 
-    # 2. Sleep the agent
+    # 2. Deactivate agent
     await runtime.sleep("runtime_test_001")
     assert "runtime_test_001" not in runtime.active_agents
 
-    # 3. Verify persistence of state in DB
+    # 3. Verify persistence of IDLE state
     async with AsyncSessionLocal() as session:
         agent_repo = AgentRepository(session)
         agent = await agent_repo.get("runtime_test_001")

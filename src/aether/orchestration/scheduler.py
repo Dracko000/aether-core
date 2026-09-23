@@ -16,7 +16,7 @@ class ScheduledJob:
 
 class Scheduler:
     """
-    Ticker-based scheduler for recurring system tasks and agent wake-up cycles.
+    Ticker-based scheduler for recurring system tasks and agent activation cycles.
     """
     def __init__(self):
         self._jobs: Dict[str, ScheduledJob] = {}

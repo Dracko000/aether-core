@@ -8,7 +8,7 @@ async def read_file(args: Dict[str, Any]) -> str:
     if not path:
         return "Error: 'path' argument is required"
 
-    # Security: In a real system, we'd resolve the path to ensure it's within a sandbox
+    # Path resolution must be validated against the sandbox boundary to prevent directory traversal
     try:
         with open(path, 'r') as f:
             return f.read()

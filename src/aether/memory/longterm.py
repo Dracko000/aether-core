@@ -4,15 +4,15 @@ from aether.storage.models import LongTermMemory
 
 class LongTermMemoryManager:
     """
-    L5 Long-Term Memory: Core identity and highly distilled insights.
-    Now uses the centralized SQLAlchemy model.
+    L5 Long-Term Memory: Manages core identity and high-level distilled insights
+    via a centralized SQLAlchemy model.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def add(self, agent_id: str, fact: str, importance: float):
         from datetime import datetime
-        # Create a LongTermMemory object
+        # Persist memory record
         memory = LongTermMemory(
             agent_id=agent_id,
             fact=fact,
@@ -23,7 +23,7 @@ class LongTermMemoryManager:
         await self.session.commit()
 
     async def get_core_insights(self, agent_id: str):
-        # Using SQLAlchemy select
+        # Execute query for agent insights
         from sqlalchemy import select
         stmt = select(LongTermMemory).where(LongTermMemory.agent_id == agent_id)
         result = await self.session.execute(stmt)

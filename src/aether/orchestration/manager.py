@@ -15,13 +15,14 @@ logger = logging.getLogger("aether.orchestration.manager")
 
 class OrchestrationManager:
     """
-    The central coordinator for Aether Core.
-    Links the Agent Runtime, Task Queue, and Event Bus.
+    Central coordinator for Aether Core.
+    Integrates Agent Runtime, Task Queue, and Event Bus.
     """
-    def __init__(self, runtime: AgentRuntime):
+    def __init__(self, runtime: AgentRuntime, capability_matrix: Optional[Any] = None):
         self.runtime = runtime
         self.tasks = TaskQueue(event_bus=bus)
         self.scheduler = Scheduler()
+        self.capability_matrix = capability_matrix
 
         # Register internal event handlers
         bus.subscribe("TASK_ENQUEUED", self._on_task_enqueued)
@@ -46,10 +47,10 @@ class OrchestrationManager:
 
     async def process_wake_events(self):
         """
-        Polls for pending agent events and wakes agents based on triggers.
-        This should be called by a background loop.
+        Processes pending agent events and evaluates autonomous goal-driven requirements.
         """
         async with AsyncSessionLocal() as session:
+            # 1. Handle external wake events (messages, scheduled tasks)
             event_repo = AgentEventRepository(session)
             pending_events = await event_repo.get_pending_events(time.time())
 
@@ -59,20 +60,93 @@ class OrchestrationManager:
 
                 logger.info(f"Processing wake event {event_type} for agent {agent_id}")
 
-                # Wake the agent via runtime
                 try:
                     await self.runtime.wake(agent_id)
 
-                    # If the event was a specific task trigger, we can now assign it
                     if event_type == "SCHEDULED_TASK":
                         payload = event_repo.deserialize_payload(event)
                         await self.assign_task(agent_id, payload, priority=event.priority)
 
-                    # Clear the event from DB
                     await event_repo.delete_event(event.event_id)
 
                 except Exception as e:
                     logger.error(f"Failed to wake agent {agent_id} for event {event.event_id}: {e}")
+
+            # 2. Process autonomous goal-driven activation
+            from aether.cognitive.goals import GoalManager
+            from aether.cognitive.drives import DriveManager
+            goal_manager = GoalManager(session)
+            drive_manager = DriveManager(session)
+
+            # Evaluate all agents for potential autonomous actions.
+            # In a production environment, evaluation is limited to inactive agents
+            # with existing active goals.
+            from aether.storage.repositories import AgentRepository
+            agent_repo = AgentRepository(session)
+            agents = await agent_repo.get_all_agents() # Assuming this method exists or similar
+
+            for agent in agents:
+                agent_id = agent.agent_id
+                if not self.runtime.is_agent_awake(agent_id):
+                    action = await goal_manager.get_next_autonomous_action(agent_id)
+                    if action:
+                        logger.info(f"Autonomous goal trigger for agent {agent_id}: {action['task']['action']}")
+                        await self.runtime.wake(agent_id)
+
+                        # Update drives based on the trigger
+                        # Simulation: If the action is 'SEARCH', increase Curiosity
+                        impact = {}
+                        if action['task']['action'] == "SEARCH":
+                            impact = {"curiosity": 0.1}
+                        elif action['task']['action'] == "SYNTHESIZE":
+                            impact = {"coherence": 0.1}
+
+                        await drive_manager.update_drives(agent_id, action['task']['action'], impact)
+                        drives = await drive_manager.repo.get_drives(agent_id)
+
+                        # Check if the task is a coalition task
+                        if action['task'].get("assignee") == "COALITION":
+                            # Logic for coalition task distribution
+                            from aether.cognitive.coalitions import CoalitionManager
+                            coal_mgr = CoalitionManager(session)
+                            logger.info(f"Dispatching coalition task {action['task']['task_id']} to group")
+                            # Distribution logic would go here
+
+                        # Convert decomposed goal task into a system Task
+                        # Evaluate cognitive requirements for the target task
+                        from aether.model.capabilities import CapabilityMatrix
+                        from aether.model.migration import ModelMigrationManager
+
+                        # Recalculate the best action now that drives have been updated
+                        action = await goal_manager.get_next_autonomous_action(agent_id, drives=drives)
+                        if not action:
+                            continue
+
+                        # Use the updated action for the rest of the loop
+                        task_payload = action['task']
+                        priority = action['priority']
+
+                        matrix = self.capability_matrix
+                        current_model = agent.model_id
+                        caps = matrix.get_capabilities(current_model) if matrix else None
+
+                        # Trigger autonomous evolution if reasoning capabilities are insufficient for complex tasks.
+                        # Current implementation uses a threshold of 3 for complex cognitive operations.
+                        if caps and caps.reasoning_level < 3 and task_payload['action'] in ["PLAN", "SYNTHESIZE", "SEARCH", "READ", "SUMMARIZE"]:
+                            logger.info(f"Capability gap detected for agent {agent_id}. Initiating model evolution...")
+                            # Task definitions should ideally specify required reasoning levels.
+                            best_model = self.capability_matrix.find_best_model({"reasoning_level": 3}) if self.capability_matrix else None
+                            if best_model and best_model != current_model:
+                                migration_mgr = ModelMigrationManager(self.runtime, self.capability_matrix)
+                                await migration_mgr.migrate_agent(agent_id, best_model)
+                                # Update local agent object to reflect model migration
+                                agent.model_id = best_model
+
+                        await self.assign_task(
+                            agent_id,
+                            payload=action['task'],
+                            priority=action['priority']
+                        )
 
     async def send_agent_message(self, sender_id: str, receiver_id: str, content: str):
         """
@@ -110,7 +184,7 @@ class OrchestrationManager:
 
     async def _on_task_enqueued(self, event: Event):
         """
-        React to new tasks by ensuring the target agent is awake.
+        Ensures the target agent is active upon task enqueueing.
         """
         agent_id = event.payload.get("agent_id")
         task_id = event.payload.get("task_id")
@@ -130,7 +204,7 @@ class OrchestrationManager:
 
     async def _on_agent_awakened(self, event: Event):
         """
-        When an agent awakens, we check if there's immediate work.
+        Evaluates pending work immediately upon agent activation.
         """
         agent_id = event.payload.get("agent_id")
         logger.debug(f"Agent {agent_id} awakened; checking for pending tasks")

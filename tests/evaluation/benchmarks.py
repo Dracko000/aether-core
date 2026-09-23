@@ -16,14 +16,13 @@ async def test_gbnf_structured_output_accuracy():
     """
     Verify that the structured output enforced by GBNF matches the Pydantic schema exactly.
     """
-    adapter = MockAdapter() # In real tests, this would be a llama.cpp adapter
+    adapter = MockAdapter()  # Simulation of a llama.cpp adapter
 
-    # Define the expected schema
+    # Initialize the structural schema
     schema = TestResponse
     gbnf_grammar = pydantic_to_gbnf(schema)
 
-    # Mock the structured call
-    # The MockAdapter expects messages and schema
+    # Execute structured call
     result = await adapter.structured(
         messages=[{"role": "user", "content": "Summarize the aether core project."}],
         schema=schema
@@ -50,26 +49,26 @@ async def test_fast_slow_path_latency():
     model_manager = ModelManager(adapter)
 
     async with AsyncSessionLocal() as session:
-        # MUST initialize DB tables for the session
+        # Initialize database tables for the current session
         await init_db()
 
-        # Memory manager needs a session and a vector store
+        # Memory manager requires a session and a vector store
         vector_store = LocalVectorStore()
         memory_manager = MemoryManager(session=session, vector_store=vector_store)
         engine = CognitiveEngine(model_manager, memory_manager)
 
-        # Fast path: direct response
+        # Fast path: execute direct response
         start_fast = asyncio.get_event_loop().time()
-        # Using execute() as it's the public API
+        # utilize execute() as the primary public API
         await engine.execute(agent_id="test_agent", query="Quick answer")
         end_fast = asyncio.get_event_loop().time()
 
-        # Slow path: recursive reflection
+        # Slow path: execute recursive reflection
         start_slow = asyncio.get_event_loop().time()
-        # Long query triggers SLOW path in decide_path()
+        # Extended query triggers the slow cognitive path in decide_path()
         await engine.execute(agent_id="test_agent", query="This is a very long query to trigger the slow cognitive path of the engine")
         end_slow = asyncio.get_event_loop().time()
 
-        # Slow path should generally take longer or equal in Mock
-        # In MockAdapter, latency is almost zero, so we just check that it runs without error.
+        # Validate that the slow path duration is non-negative
+        # In MockAdapter, latency is negligible; verify execution without error.
         assert (end_slow - start_slow) >= 0

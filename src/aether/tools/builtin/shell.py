@@ -8,7 +8,7 @@ async def shell_execute(args: Dict[str, Any]) -> str:
     if not command:
         return "Error: 'command' argument is required"
 
-    # Use the Rust Sandbox for shell execution
+    # Dispatch execution to the secure sandbox environment
     sandbox = RustSandboxClient()
     try:
         # Split command into binary and args
@@ -22,7 +22,7 @@ def register_shell_tools():
     registry.register(
         ToolSchema(
             name="shell.execute",
-            description="Execute a shell command in the secure Rust sandbox",
+            description="Execute a command within the secure sandbox environment",
             parameters={"command": "string"},
             risk_level="HIGH"
         ),

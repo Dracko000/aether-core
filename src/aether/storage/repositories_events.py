@@ -5,7 +5,7 @@ from aether.storage.models_events import AgentEventModel
 
 class AgentEventRepository:
     """
-    Handles persistence of events that trigger agent activity.
+    Manages the persistence of events that trigger agent activity.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -24,7 +24,7 @@ class AgentEventRepository:
         await self.session.commit()
 
     async def get_pending_events(self, now: float):
-        """Retrieve events ready for processing (scheduled_at <= now or None)."""
+        """Retrieves events ready for processing based on their scheduled time."""
         stmt = select(AgentEventModel).where(
             (AgentEventModel.scheduled_at == None) |
             (AgentEventModel.scheduled_at <= now)
@@ -32,13 +32,12 @@ class AgentEventRepository:
         result = await self.session.execute(stmt)
         events = result.scalars().all()
 
-        # We return the model objects. Since we modified payload in-place
-        # in the previous version, SQLAlchemy tried to flush the dict back to SQLite.
-        # We should return a list of data transfer objects or avoid mutating the model.
+        # Return the model objects. Returning data transfer objects (DTOs) is preferred
+        # to avoid SQLAlchemy autoflush issues when mutating model attributes.
         return events
 
     def deserialize_payload(self, event: AgentEventModel) -> dict:
-        """Helper to deserialize the payload of an event."""
+        """Deserializes the payload of an event."""
         if isinstance(event.payload, str):
             return json.loads(event.payload)
         return event.payload

@@ -7,8 +7,8 @@ from aether.memory.manager import MemoryManager
 
 class CognitiveEngine:
     """
-    The logic center of the agent. Orchestrates the path from
-    input to final response using the model, memory, and tools.
+    Core cognitive orchestrator. Manages the execution flow from
+    input to response by integrating model inference, memory, and tool use.
     """
     def __init__(self, model_manager: ModelManager, memory_manager: MemoryManager):
         self.model_manager = model_manager

@@ -3,8 +3,8 @@ from collections import deque
 
 class WorkingMemory:
     """
-    L1 Working Memory: Current task context.
-    A volatile, sliding-window buffer of the most recent interactions.
+    L1 Working Memory: Manages immediate task context using a volatile,
+    sliding-window buffer of recent interactions.
     """
     def __init__(self, max_size: int = 20):
         self.buffer = deque(maxlen=max_size)

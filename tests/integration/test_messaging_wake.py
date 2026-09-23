@@ -10,6 +10,7 @@ from aether.agent.lifecycle import AgentState
 
 @pytest.mark.asyncio
 async def test_messaging_wake_flow():
+    """Verify that receiving a message triggers agent activation."""
     agent_a = "agent_a"
     agent_b = "agent_b"
 
@@ -27,12 +28,12 @@ async def test_messaging_wake_flow():
     runtime = AgentRuntime()
     orch_manager = OrchestrationManager(runtime)
 
-    # Agent A sends message to B
+    # Agent A initiates communication with Agent B
     await orch_manager.send_agent_message(agent_a, agent_b, "Hello from A!")
 
-    # Process wake events
+    # Process activation events
     await orch_manager.process_wake_events()
 
-    # Verify B was woken up
+    # Verify Agent B activation
     assert runtime.is_agent_awake(agent_b)
     assert runtime.active_agents[agent_b]["state"] == AgentState.AWAKENED

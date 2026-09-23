@@ -8,7 +8,7 @@ class VerificationResult(BaseModel):
 
 class VerificationEngine:
     """
-    Logic for verifying tool results and plan progress.
+    Provides verification logic for tool outputs and plan progression.
     """
     async def verify(self, goal: str, result: Any) -> VerificationResult:
         # Mock verification for MVP

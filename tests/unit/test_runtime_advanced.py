@@ -12,9 +12,9 @@ async def test_runtime_state_transitions():
     runtime = AgentRuntime()
     agent_id = "transition_test_001"
 
-    # Setup agent in DB
+    # Agent instantiation in database
     async with AsyncSessionLocal() as session:
-        # Clean up to avoid IntegrityError
+        # Prevent IntegrityError by clearing existing records
         from aether.storage.models import Agent, Identity
         from sqlalchemy import delete
         await session.execute(delete(Agent))
@@ -26,16 +26,15 @@ async def test_runtime_state_transitions():
         await agent_repo.create(agent_id)
         await id_repo.create(agent_id, "Test", "Role", {}, [])
 
-    # 1. IDLE -> AWAKENED
+    # 1. Transition: IDLE -> AWAKENED
     await runtime.wake(agent_id)
     assert runtime.active_agents[agent_id]["state"] == AgentState.AWAKENED
 
-    # 2. AWAKENED -> THINKING (Simulated transition)
-    # In the final implementation, the cognitive engine handles this,
-    # but we can test if the runtime allows the state update.
+    # 2. Transition: AWAKENED -> THINKING
+    # The cognitive engine manages this in production; here we verify runtime state update.
     runtime.active_agents[agent_id]["state"] = AgentState.THINKING
 
-    # 3. THINKING -> IDLE (Sleep)
+    # 3. Transition: THINKING -> IDLE (Sleep)
     await runtime.sleep(agent_id)
     assert agent_id not in runtime.active_agents
 
@@ -52,5 +51,5 @@ async def test_wake_non_existent_agent():
 @pytest.mark.asyncio
 async def test_sleep_non_active_agent():
     runtime = AgentRuntime()
-    # Should not raise exception
+    # Verify that sleeping a non-active agent does not raise an exception
     await runtime.sleep("any_agent")

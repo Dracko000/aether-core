@@ -5,8 +5,7 @@ from datetime import datetime
 
 class LifecycleEvent(Base):
     """
-    Immutable record of an agent's state transition.
-    Provides the foundation for the Agent Timeline.
+    Immutable record of an agent state transition, forming the basis of the agent timeline.
     """
     __tablename__ = "lifecycle_events"
 

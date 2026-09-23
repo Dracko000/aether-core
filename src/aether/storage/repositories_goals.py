@@ -4,7 +4,7 @@ from aether.storage.models_goals import AgentGoalModel
 
 class GoalRepository:
     """
-    Handles persistence of agent goals.
+    Manages the persistence of agent goals.
     """
     def __init__(self, session: AsyncSession):
         self.session = session

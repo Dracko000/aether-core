@@ -19,8 +19,8 @@ class VectorStore(ABC):
 
 class LocalVectorStore(VectorStore):
     """
-    A lightweight local vector store using NumPy for cosine similarity.
-    Persists indices and vectors to disk using pickle for the MVP.
+    Local vector storage implementation using NumPy for cosine similarity.
+    Persists indices and vectors to disk via serialization.
     """
     def __init__(self, storage_path: str = "./data/vectors/store.pkl"):
         self.storage_path = storage_path

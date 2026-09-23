@@ -15,20 +15,20 @@ class InferenceRequest(Generic[T]):
 class ModelManager:
     """
     Coordinates access to the model backend.
-    Ensures that only one inference request is processed at a time
-    to stay within RAM limits on 8GB environments.
+    Serializes inference requests to maintain stability within constrained
+    memory environments (e.g., 8GB RAM).
     """
     def __init__(self, adapter: ModelAdapter):
         self.adapter = adapter
         self.queue = asyncio.PriorityQueue()
-        # Start the background worker
+        # Start background worker
         self._worker_task = asyncio.create_task(self._worker())
 
     async def _worker(self):
         while True:
             request = await self.queue.get()
             try:
-                # Execute the adapter call
+                # Execute adapter call
                 result = await request.func()
                 request.future.set_result(result)
             except Exception as e:
@@ -38,9 +38,9 @@ class ModelManager:
 
     async def request(self, priority: int, func: Callable[[], Awaitable[T]]) -> T:
         """
-        Submit a model request to the priority queue.
-        :param priority: Lower numbers = Higher priority.
-        :param func: An awaitable function that calls the adapter.
+        Submits a model request to the priority queue.
+        :param priority: Priority level (lower values indicate higher priority).
+        :param func: Awaitable function executing the adapter call.
         """
         future = asyncio.get_event_loop().create_future()
         await self.queue.put(InferenceRequest(priority, func, future))

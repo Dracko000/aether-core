@@ -20,8 +20,8 @@ async def test_priority_queue_ordering():
         results.append(request_id)
         return f"Result {request_id}"
 
-    # We enqueue tasks in reverse order of priority
-    # Priority 10 (Low) -> Priority 5 (Med) -> Priority 1 (High)
+    # Enqueue tasks in descending order of priority
+    # Priority 10 (Low) -> Priority 5 (Medium) -> Priority 1 (High)
     tasks = [
         manager.request(priority=10, func=lambda: mock_request(10, "low")),
         manager.request(priority=5, func=lambda: mock_request(5, "med")),
@@ -30,8 +30,8 @@ async def test_priority_queue_ordering():
 
     await asyncio.gather(*tasks)
 
-    # The PriorityQueue should have processed "high" then "med" then "low"
-    # Note: Since the ModelManager processes one at a time, results should be ordered.
+    # Verify PriorityQueue ordering: "high" processed first, then "med", then "low".
+    # Sequential processing ensures results are ordered.
     assert results == ["high", "med", "low"]
 
 @pytest.mark.asyncio
@@ -48,7 +48,7 @@ async def test_concurrent_load_stability():
             func=lambda: adapter.generate(f"Stress test {i}")
         )
 
-    # Simulate 50 concurrent requests
+    # Simulate 50 concurrent requests to verify stability
     tasks = [heavy_task(i) for i in range(50)]
 
     start_time = time.time()
@@ -74,20 +74,19 @@ async def test_priority_preemption_logic():
         results.append(name)
         return name
 
-    # 1. Start a slow low-priority task
+    # 1. Initialize low-priority task
     t1 = asyncio.create_task(manager.request(priority=10, func=lambda: slow_task("low")))
 
-    # Give it a tiny bit of time to start
+    # Allow minimal lead time for task initiation
     await asyncio.sleep(0.01)
 
-    # 2. Start a high-priority task
+    # 2. Initialize high-priority task
     t2 = asyncio.create_task(manager.request(priority=1, func=lambda: slow_task("high")))
 
     await asyncio.gather(t1, t2)
 
-    # Since the manager processes sequentially, t1 starts first,
-    # but if t1 was still in queue, t2 would jump.
-    # In this specific case, t1 is already being executed by the adapter.
-    # But if we had 10 low and then 1 high, high should be 2nd.
+    # Given sequential processing, t1 executes first if already active.
+    # If t1 remained in queue, t2 would precede it.
+    # In this scenario, t1 is already being processed by the adapter.
     assert "high" in results
     assert "low" in results

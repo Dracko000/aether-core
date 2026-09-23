@@ -13,21 +13,19 @@ async def test_agent_continuity_restart():
     agent_id = "persistent_agent_001"
     agent_name = "Aether-1"
 
-    # 1. First session: Create agent and identity
+    # 1. Initial Session: Establish agent identity and configuration
     async with AsyncSessionLocal() as session:
         await init_db()
         agent_repo = AgentRepository(session)
         id_repo = IdentityRepository(session)
 
-        # Check if agent already exists from previous failed runs
+        # Verify if agent exists from previous executions
         existing_agent = await agent_repo.get(agent_id)
         if not existing_agent:
             await agent_repo.create(agent_id)
 
-        # Create identity (using a fresh identity to avoid constraints if necessary,
-        # but here we just ensure the agent exists first)
-        # To be safe, we delete identity first or use an upsert.
-        # For the test, we'll just use a unique agent_id per run.
+        # Establish identity
+        # Ensuring unique agent_id per execution to maintain isolation.
         await id_repo.create(
             agent_id=agent_id,
             name=agent_name,
@@ -36,15 +34,15 @@ async def test_agent_continuity_restart():
             skills=["search", "analysis"]
         )
 
-        # Put agent into a specific state
+        # Define agent operational state
         agent = await agent_repo.get(agent_id)
         agent.status = "AWAKENED"
         await session.commit()
 
-    # 2. Simulate restart: Create a new runtime and load the agent
+    # 2. Runtime Reset: Instantiate new runtime and restore agent state
     runtime = AgentRuntime()
 
-    # Use the existing DB to wake the agent
+    # Restore agent using the persistent database
     identity = await runtime.wake(agent_id)
 
     assert identity.name == agent_name
@@ -66,14 +64,14 @@ async def test_model_replacement_continuity():
         async def chat(self, messages, **kwargs):
             return "New Model Response"
 
-    # Original setup
+    # Establish primary adapter
     adapter_v1 = MockAdapter()
-    # Assume some state is held in identity/memory (verified in previous tests)
+    # State persistence is verified in corresponding cognitive tests
 
-    # Replace adapter
+    # Transition to updated adapter
     adapter_v2 = NewModelAdapter()
 
-    # Continuity check: The agent's identity remains unchanged regardless of model
+    # Continuity Verification: Ensure agent identity is invariant to model transitions
     identity_data = {
         "agent_id": "agent_002",
         "name": "Continuity-Agent",
@@ -85,5 +83,5 @@ async def test_model_replacement_continuity():
     identity_v2 = AgentIdentity(**identity_data)
 
     assert identity_v1.name == identity_v2.name
-    # In a full system test, we would verify that the memory retrieval
-    # works the same way across different adapters.
+    # In integrated system tests, verify that memory retrieval consistency
+    # is maintained across adapter transitions.

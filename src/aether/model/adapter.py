@@ -5,8 +5,8 @@ from pydantic import BaseModel
 class ModelAdapter(ABC):
     """
     Abstract Base Class for LLM adapters.
-    All model backends (Ollama, llama.cpp, etc.) must implement this interface
-    to ensure the model remains a replaceable commodity.
+    Standardizes the interface for all model backends to ensure
+    backend modularity and replaceability.
     """
 
     @abstractmethod

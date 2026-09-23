@@ -6,9 +6,10 @@ from aether.agent.lifecycle import AgentState
 
 @pytest.mark.asyncio
 async def test_runtime_integration_flow():
+    """Verify integration between the AgentRuntime and persistence layer."""
     await init_db()
 
-    # Setup
+    # Provision test agent
     async with AsyncSessionLocal() as session:
         agent_repo = AgentRepository(session)
         id_repo = IdentityRepository(session)
@@ -18,16 +19,16 @@ async def test_runtime_integration_flow():
 
     runtime = AgentRuntime()
 
-    # 1. Wake Agent
+    # 1. Activation
     identity = await runtime.wake(agent_id)
     assert identity.name == "Aria"
     assert agent_id in runtime.active_agents
 
-    # 2. Sleep Agent
+    # 2. Deactivation
     await runtime.sleep(agent_id)
     assert agent_id not in runtime.active_agents
 
-    # 3. Verify Persistence
+    # 3. Persistence Verification
     async with AsyncSessionLocal() as session:
         agent_repo = AgentRepository(session)
         agent = await agent_repo.get(agent_id)

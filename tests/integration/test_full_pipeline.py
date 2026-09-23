@@ -14,14 +14,14 @@ from aether.tools.builtin.filesystem import register_filesystem_tools
 @pytest.mark.asyncio
 async def test_aether_core_full_pipeline():
     """
-    Full System Smoke Test:
-    Task -> Orchestration -> Runtime -> CognitiveEngine -> Memory -> Tools -> Response -> Consolidation
+    End-to-End System Validation:
+    Traces a request through the full cognitive pipeline: Orchestration -> Runtime -> Cognitive Engine -> Memory -> Tools -> Consolidation.
     """
-    # 1. Infrastructure Setup
+    # 1. Infrastructure Provisioning
     async with AsyncSessionLocal() as session:
         await init_db()
 
-        # Setup Components
+        # Component Initialization
         adapter = MockAdapter()
         model_manager = ModelManager(adapter)
         vector_store = LocalVectorStore()
@@ -29,23 +29,23 @@ async def test_aether_core_full_pipeline():
         runtime = AgentRuntime()
         orchestrator = OrchestrationManager(runtime)
 
-        # Register Tools
+        # Tool Registration
         register_filesystem_tools()
 
         await orchestrator.start()
 
-        # 2. Agent Identity Setup
+        # 2. Agent Identity Provisioning
         agent_id = "smoke_agent_001"
         from aether.storage.repositories import AgentRepository, IdentityRepository
         agent_repo = AgentRepository(session)
         id_repo = IdentityRepository(session)
 
-        # Ensure clean start for the agent
+        # Ensure clean state for the agent
         existing_agent = await agent_repo.get(agent_id)
         if not existing_agent:
             await agent_repo.create(agent_id)
 
-        # Ensure identity doesn't already exist
+        # Ensure identity record exists
         existing_id = await id_repo.get_by_id(agent_id)
         if not existing_id:
             await id_repo.create(
@@ -56,44 +56,43 @@ async def test_aether_core_full_pipeline():
                 skills=["filesystem"]
             )
 
-        # Grant permissions for the test
+        # Authorization
         from aether.tools.permissions import PermissionManager
         pm = PermissionManager(session)
         await pm.grant_permission(agent_id, "filesystem.read")
 
-        # 3. Execute Pipeline
-        # Create a file for the agent to read
+        # 3. Pipeline Execution
+        # Provision test artifact for tool retrieval
         test_file = "smoke_test.txt"
         with open(test_file, "w") as f:
             f.write("System verified: Aether Core is operational.")
 
-        # Assign a task that requires a tool
+        # Dispatch task requiring tool invocation
         task_payload = {"query": f"Read the content of {test_file}", "type": "tool_use"}
         task_id = await orchestrator.assign_task(agent_id, task_payload)
 
-        # Verify Agent State: Sleeping -> Awakened -> Thinking
+        # Verify state transition: Sleeping -> Awakened -> Thinking
         assert runtime.is_agent_awake(agent_id)
         assert runtime.active_agents[agent_id]["state"].name == "THINKING"
 
-        # Simulate the Cognitive Engine's execution of the task
-        # In a full integration, the agent's loop would do this.
+        # Execute cognitive processing path
         from aether.cognitive.engine import CognitiveEngine
         engine = CognitiveEngine(model_manager, memory_manager)
 
-        # Execute cognitive path
+        # Process query through cognitive engine
         response = await engine.execute(agent_id=agent_id, query=task_payload["query"])
 
-        # Verify response exists
+        # Verify response generation
         assert response is not None
 
-        # Simulate tool execution as part of the loop
+        # Execute tool invocation via ToolExecutor
         from aether.tools.executor import ToolExecutor
         executor = ToolExecutor(session)
         tool_result = await executor.execute(agent_id, "filesystem.read", {"path": test_file})
         assert "System verified" in tool_result
 
         # 4. Memory Consolidation
-        # Simulate the agent learning from this experience
+        # Integrate experience into long-term memory
         experience = {
             "event": "Verified system operational",
             "context": "Smoke test execution",
@@ -101,8 +100,7 @@ async def test_aether_core_full_pipeline():
         }
         await memory_manager.consolidate(agent_id, experience)
 
-        # Verify consolidation (check if something entered vector store)
-        # We use a simple query to see if the consolidated fact is retrievable
+        # Verify retrieval of consolidated fact
         memories = await memory_manager.retrieve(agent_id, "system operational")
         assert len(memories) > 0
 

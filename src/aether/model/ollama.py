@@ -47,8 +47,8 @@ class OllamaAdapter(ModelAdapter):
     async def structured(self, messages: List[Dict[str, str]], schema: type[BaseModel], **kwargs) -> BaseModel:
         grammar = pydantic_to_gbnf(schema)
 
-        # Convert messages to a single prompt for /api/generate
-        # since grammars are often better supported there in some Ollama versions
+        # Consolidate messages into a single prompt for /api/generate
+        # to ensure broader compatibility with grammar support in Ollama.
         prompt = ""
         for msg in messages:
             prompt += f"{msg['role']}: {msg['content']}\n"

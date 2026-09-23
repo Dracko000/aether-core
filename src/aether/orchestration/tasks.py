@@ -35,8 +35,8 @@ class Task:
 
 class TaskQueue:
     """
-    Manages a prioritized queue of tasks.
-    Integrated with the event bus to notify the system when tasks arrive.
+    Manages a prioritized task queue.
+    Integrates with the event bus to notify the system of task arrival.
     """
     def __init__(self, event_bus=None):
         self._queue: List[Task] = []

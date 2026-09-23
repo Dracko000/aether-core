@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 
 class AgentIdentity(BaseModel):
     """
-    Domain model for an agent's persistent identity.
+    Represents the persistent identity and core attributes of an agent.
     """
     agent_id: str
     name: str

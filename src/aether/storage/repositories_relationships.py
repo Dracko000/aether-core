@@ -4,13 +4,13 @@ from aether.storage.models_relationships import RelationshipModel
 
 class RelationshipRepository:
     """
-    Handles persistence of agent relationships.
+    Manages the persistence of agent relationships and trust metrics.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def set_relationship(self, source_id: str, target_id: str, rel_type: str = "NEUTRAL", trust: float = 0.5, notes: str = None):
-        # Upsert logic
+        # Upsert relationship record
         stmt = select(RelationshipModel).where(
             RelationshipModel.source_agent_id == source_id,
             RelationshipModel.target_agent_id == target_id
