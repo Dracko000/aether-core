@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Text, Float, ForeignKey, Boolean, JSON
 from aether.storage.models import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 class AgentMessageModel(Base):
     """
@@ -17,5 +17,5 @@ class AgentMessageModel(Base):
     # Structured knowledge payloads (e.g., {"fragment_id": "...", "type": "belief"})
     payload: Mapped[dict] = mapped_column(JSON, nullable=True)
 
-    timestamp: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    timestamp: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)

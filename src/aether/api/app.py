@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -16,7 +17,18 @@ from aether.api.routes import health, agents
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aether.api")
 
-app = FastAPI(title="Aether Core API v1")
+runtime = AgentRuntime()
+orch_manager = OrchestrationManager(runtime)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await orch_manager.start()
+    logger.info("Aether Core API started")
+    yield
+    await orch_manager.stop()
+    logger.info("Aether Core API stopped")
+
+app = FastAPI(title="Aether Core API v1", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,19 +41,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(agents.router, prefix="/agents")
 
-# Global State
-runtime = AgentRuntime()
-orch_manager = OrchestrationManager(runtime)
-
-@app.on_event("startup")
-async def startup_event():
-    await orch_manager.start()
-    logger.info("Aether Core API started")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    await orch_manager.stop()
-
+# Global State (single instance; lifecycle handled by lifespan above)
 # Schemas
 class MessageRequest(BaseModel):
     sender_id: str

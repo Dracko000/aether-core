@@ -1,7 +1,7 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import String, Text, JSON, DateTime, Float, ForeignKey
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Base(DeclarativeBase):
     pass
@@ -25,7 +25,7 @@ class EpisodicMemory(Base):
     __tablename__ = "episodic_memories"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     agent_id: Mapped[str] = mapped_column(String, ForeignKey("agents.agent_id"))
-    timestamp: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    timestamp: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
     event: Mapped[str] = mapped_column(Text)
     context: Mapped[str] = mapped_column(Text)
     result: Mapped[str] = mapped_column(Text)

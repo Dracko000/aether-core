@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Float
 from aether.storage.models import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 class AgentDriveModel(Base):
     """
@@ -23,4 +23,4 @@ class AgentDriveModel(Base):
     anxiety: Mapped[float] = mapped_column(Float, default=0.0)
     joy: Mapped[float] = mapped_column(Float, default=0.0)
 
-    updated_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    updated_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())

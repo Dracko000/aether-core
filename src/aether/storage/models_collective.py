@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Text, Float, ForeignKey, JSON
 from aether.storage.models import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 class CoalitionModel(Base):
     """
@@ -11,7 +11,7 @@ class CoalitionModel(Base):
 
     coalition_id: Mapped[str] = mapped_column(String, primary_key=True)
     goal_id: Mapped[str] = mapped_column(String, index=True) # Associated high-level goal
-    created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
     status: Mapped[str] = mapped_column(String, default="ACTIVE") # Coalition status (ACTIVE, COMPLETED, DISBANDED)
 
 class CoalitionMember(Base):
@@ -22,7 +22,7 @@ class CoalitionMember(Base):
 
     coalition_id: Mapped[str] = mapped_column(String, ForeignKey("coalitions.coalition_id"), primary_key=True)
     agent_id: Mapped[str] = mapped_column(String, ForeignKey("agents.agent_id"), primary_key=True)
-    joined_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    joined_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
     role: Mapped[str] = mapped_column(String, default="MEMBER") # Role within coalition (e.g., LEADER, CONTRIBUTOR)
 
 class SharedKnowledgeModel(Base):
@@ -41,4 +41,4 @@ class SharedKnowledgeModel(Base):
     context_id: Mapped[str] = mapped_column(String, index=True)
 
     importance: Mapped[float] = mapped_column(Float, default=1.0)
-    timestamp: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    timestamp: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())

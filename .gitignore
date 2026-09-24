@@ -13,5 +13,8 @@ tests/.test_data/
 data/sqlite/*.db
 data/vectors/*.pkl
 
+# Build artifacts
+build/
+
 # Environment
 .env

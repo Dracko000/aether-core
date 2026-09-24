@@ -11,11 +11,11 @@ class EpisodicMemoryManager:
         self.session = session
 
     async def add(self, agent_id: str, event: str, context: str, result: str, lesson: str = None):
-        from datetime import datetime
+        from datetime import datetime, timezone
         # Persist episodic record
         memory = EpisodicMemory(
             agent_id=agent_id,
-            timestamp=datetime.utcnow().timestamp(),
+            timestamp=datetime.now(timezone.utc).timestamp(),
             event=event,
             context=context,
             result=result,

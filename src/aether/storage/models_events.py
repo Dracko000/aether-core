@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Text, Float, ForeignKey
 from aether.storage.models import Base
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 class AgentEventModel(Base):
@@ -16,5 +16,5 @@ class AgentEventModel(Base):
     priority: Mapped[int] = mapped_column(default=10)
     payload: Mapped[dict] = mapped_column(Text) # Store as JSON string or JSON type
     source: Mapped[str] = mapped_column(String)
-    created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
     scheduled_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
