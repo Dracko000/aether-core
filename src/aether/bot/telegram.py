@@ -63,6 +63,12 @@ class AetherTelegramBot:
         self.application = None
         logger.info("Telegram bot stopped")
 
+    async def send_message(self, chat_id: str, text: str) -> None:
+        """Send a proactive message to a chat via the running bot."""
+        if self.application is None:
+            raise RuntimeError("bot not started")
+        await self.application.bot.send_message(chat_id=chat_id, text=text)
+
     async def _cmd_start(self, update, context):
         await update.message.reply_text(
             f"Hi! I'm connected to Aether agent '{self.agent_id}'.\n"

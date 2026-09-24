@@ -18,6 +18,7 @@ def _restore_settings():
         settings.TELEGRAM_BOT_TOKEN,
         settings.TELEGRAM_AGENT_ID,
         settings.TELEGRAM_ENABLED,
+        settings.TELEGRAM_CHAT_ID,
         settings.OLLAMA_MODEL,
     )
     yield
@@ -25,6 +26,7 @@ def _restore_settings():
         settings.TELEGRAM_BOT_TOKEN,
         settings.TELEGRAM_AGENT_ID,
         settings.TELEGRAM_ENABLED,
+        settings.TELEGRAM_CHAT_ID,
         settings.OLLAMA_MODEL,
     ) = saved
 
@@ -152,6 +154,7 @@ def test_setup_start_writes_env_and_starts(monkeypatch, tmp_path):
         setup_mod, "check_telegram_token", AsyncMock(return_value={"ok": True, "username": "my_bot"})
     )
     started = AsyncMock()
+    started.return_value.send_message = AsyncMock()
     monkeypatch.setattr(setup_mod, "start_bot_in_app", started)
 
     resp = client.post(
@@ -161,12 +164,14 @@ def test_setup_start_writes_env_and_starts(monkeypatch, tmp_path):
             "telegram_token": "123:TEST",
             "agent_id": "neo",
             "ollama_model": "qwen2.5:0.5b",
+            "notify_chat_id": "987654321",
         },
     )
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
     assert body["agent_id"] == "neo"
+    assert "activation notice sent" in body.get("notification", "")
     started.assert_awaited_once()
 
     env = setup_mod.load_env(tmp_path / ".env")
@@ -174,11 +179,48 @@ def test_setup_start_writes_env_and_starts(monkeypatch, tmp_path):
     assert env["TELEGRAM_AGENT_ID"] == "neo"
     assert env["TELEGRAM_ENABLED"] == "true"
     assert env["OLLAMA_MODEL"] == "qwen2.5:0.5b"
+    assert env["TELEGRAM_CHAT_ID"] == "987654321"
 
     # In-process singleton reflects the new token immediately.
     assert settings.TELEGRAM_BOT_TOKEN == "123:TEST"
     assert settings.TELEGRAM_AGENT_ID == "neo"
     assert settings.TELEGRAM_ENABLED is True
+    assert settings.TELEGRAM_CHAT_ID == "987654321"
+
+    # The activation notice was sent to the owner's chat.
+    sent = started.return_value.send_message
+    sent.assert_awaited_once()
+    call = sent.await_args
+    assert call.args[0] == "987654321"
+    assert "ACTIVE" in call.args[1]
+
+
+def test_setup_start_notification_failure_warns(monkeypatch, tmp_path):
+    """Bot starts and env is written even if the activation notice fails."""
+    monkeypatch.setenv("AETHER_ENV_FILE", str(tmp_path / ".env"))
+    monkeypatch.setattr(
+        setup_mod, "check_telegram_token", AsyncMock(return_value={"ok": True, "username": "my_bot"})
+    )
+    started = AsyncMock()
+    started.return_value.send_message = AsyncMock(
+        side_effect=RuntimeError("chat not found")
+    )
+    monkeypatch.setattr(setup_mod, "start_bot_in_app", started)
+
+    resp = client.post(
+        "/setup",
+        json={
+            "action": "start",
+            "telegram_token": "123:TEST",
+            "agent_id": "neo",
+            "notify_chat_id": "000",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert "chat not found" in body["warning"]
+    assert setup_mod.load_env(tmp_path / ".env")["TELEGRAM_CHAT_ID"] == "000"
 
 
 def test_setup_start_rejected_token(monkeypatch, tmp_path):

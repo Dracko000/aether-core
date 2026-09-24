@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_AGENT_ID: str = "aria"
     TELEGRAM_ENABLED: bool = False
+    TELEGRAM_CHAT_ID: str = ""
 
     model_config = SettingsConfigDict(env_file=".env")
 

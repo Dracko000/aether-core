@@ -112,6 +112,7 @@ class SetupRequest(BaseModel):
     telegram_token: str = ""
     agent_id: str = "aria"
     ollama_model: str = ""
+    notify_chat_id: str = ""
     action: str = "start"  # "start" | "stop"
 
 
@@ -121,6 +122,7 @@ def _status(app) -> dict:
     masked = ""
     if token:
         masked = f"{token[:5]}…{token[-4:]}" if len(token) > 10 else "(set)"
+    chat_id = settings.TELEGRAM_CHAT_ID.strip()
     bot = getattr(app.state, "telegram_bot", None)
     return {
         "telegram_enabled": settings.TELEGRAM_ENABLED,
@@ -130,6 +132,8 @@ def _status(app) -> dict:
         "ollama_base_url": settings.OLLAMA_BASE_URL,
         "ollama_model": settings.OLLAMA_MODEL,
         "bot_running": bot is not None,
+        "notify_configured": bool(chat_id),
+        "notify_chat_id": chat_id if len(chat_id) <= 12 else f"{chat_id[:3]}…{chat_id[-2:]}",
     }
 
 
@@ -154,6 +158,8 @@ _PAGE = """<!doctype html>
 <input name="agent_id" placeholder="aria" required>
 <label>Model (optional — leave empty to use OLLAMA_MODEL)</label>
 <input name="ollama_model" placeholder="qwen2.5:0.5b">
+<label>Telegram user ID to notify when active (optional — get yours from <b>@userinfobot</b>)</label>
+<input name="notify_chat_id" placeholder="123456789" autocomplete="off">
 <div><button type="submit">💾 Save &amp; Start Bot</button>
 <button type="button" class="secondary" id="stop">🛑 Stop Bot</button></div></form>
 <pre id="result">–</pre>
@@ -172,7 +178,7 @@ _PAGE = """<!doctype html>
  document.getElementById('setup').onsubmit=async e=>{
   e.preventDefault();const f=new FormData(e.target);
   const j=await post({telegram_token:f.get('telegram_token'),agent_id:f.get('agent_id'),
-                     ollama_model:f.get('ollama_model'),action:'start'});
+                     ollama_model:f.get('ollama_model'),notify_chat_id:f.get('notify_chat_id'),action:'start'});
   document.getElementById('result').textContent=JSON.stringify(j,null,2);
   document.getElementById('result').className=j.ok?'ok':'err'; refresh();
  };
@@ -212,6 +218,7 @@ async def setup_apply(request: Request, req: SetupRequest):
             return {"ok": False, "error": f"Token rejected by Telegram: {token_info['detail']}"}
 
         agent_id = req.agent_id.strip() or settings.TELEGRAM_AGENT_ID
+        notify_chat_id = req.notify_chat_id.strip()
         updates = {
             "TELEGRAM_BOT_TOKEN": req.telegram_token.strip(),
             "TELEGRAM_AGENT_ID": agent_id,
@@ -219,6 +226,8 @@ async def setup_apply(request: Request, req: SetupRequest):
         }
         if req.ollama_model.strip():
             updates["OLLAMA_MODEL"] = req.ollama_model.strip()
+        if notify_chat_id:
+            updates["TELEGRAM_CHAT_ID"] = notify_chat_id
 
         write_env(updates)
 
@@ -228,10 +237,12 @@ async def setup_apply(request: Request, req: SetupRequest):
         settings.TELEGRAM_ENABLED = True
         if req.ollama_model.strip():
             settings.OLLAMA_MODEL = req.ollama_model.strip()
+        if notify_chat_id:
+            settings.TELEGRAM_CHAT_ID = notify_chat_id
 
         model_manager = getattr(app.state, "model_manager", None)
-        await start_bot_in_app(app, settings.TELEGRAM_BOT_TOKEN, agent_id, model_manager)
-        return {
+        bot = await start_bot_in_app(app, settings.TELEGRAM_BOT_TOKEN, agent_id, model_manager)
+        result = {
             "ok": True,
             "bot_running": True,
             "bot_username": token_info.get("username"),
@@ -239,6 +250,20 @@ async def setup_apply(request: Request, req: SetupRequest):
             "agent_id": agent_id,
             "note": "Token saved to .env. Bot is now polling in the background.",
         }
+
+        # Notify the owner that the agent is now active.
+        if notify_chat_id and bot is not None:
+            try:
+                await bot.send_message(
+                    notify_chat_id,
+                    f"✅ Aether agent '<b>{agent_id}</b>' is now <b>ACTIVE</b>.\n"
+                    f"Model: {settings.OLLAMA_MODEL} · Chat ready — send me a message!",
+                )
+                result["notification"] = f"activation notice sent to chat {notify_chat_id}"
+            except Exception as exc:  # invalid chat id, bot restrictions, …
+                logger.warning("Activation notice failed for chat %s: %s", notify_chat_id, exc)
+                result["warning"] = f"Bot started, but the activation notice could not be sent: {exc}"
+        return result
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("Setup failed")
         return {"ok": False, "error": f"Setup error: {exc}"}

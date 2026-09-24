@@ -57,9 +57,9 @@ Chat with an Aether agent straight from Telegram — every message is routed to 
    ```
    Example: `http://169.58.159.131:8456/setup`.
 3. The server defaults to `API_HOST=0.0.0.0` and `API_PORT=8456` (see `.env.example`) — make sure port **8456** is open in the VPS firewall/security group (e.g. `ufw allow 8456`, or your cloud provider panel).
-4. Get a token from **@BotFather** on Telegram, fill in the form (agent id, optional model), click **Save & Start Bot**.
+4. Get a token from **@BotFather** on Telegram, fill in the form (agent id, optional model, optional Telegram user ID to notify from @userinfobot), click **Save & Start Bot**. When the bot starts it sends an "agent ACTIVE" notice to that chat.
 
-The auto-setup validates the token via `getMe`, writes `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`), then starts the bot as a server background task. `/setup/status` shows the live status anytime.
+The auto-setup validates the token via `getMe`, writes `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`, optional `TELEGRAM_CHAT_ID`), then starts the bot as a server background task. `/setup/status` shows the live status anytime.
 
 ### 🚀 Deploy as a service (VPS/server, always-on)
 
