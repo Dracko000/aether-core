@@ -47,16 +47,24 @@ python -m aether.main
 ### 🤖 Telegram Bridge (Auto-Setup)
 Chat with an Aether agent straight from Telegram — every message is routed to one fixed agent and answered by the local model (Ollama).
 
-1. Start the API server on your VPS/server (bind `0.0.0.0` so it is publicly reachable):
+The console is a **Next.js app** (`web/`, 9Router-style shell). It is the only public surface; it proxies to the FastAPI backend (bot + engine) which runs on loopback:
+
+| Service | Address | Role |
+|---|---|---|
+| `aether-web` (Next.js) | `0.0.0.0:8456` (public) | Console at `/setup`, proxies `/setup/status` + `/api/setup` |
+| `aether.service` (FastAPI) | `127.0.0.1:8457` (internal) | Bot polling, engine, writes `.env` |
+
+1. Start the backend, then the web console:
    ```bash
-   python -m uvicorn aether.api.app:app --host 0.0.0.0 --port 8456
+   python -m uvicorn aether.api.app:app --host 127.0.0.1 --port 8457
+   cd web && npm install && npm run build && npm start   # standalone build on :8456
    ```
 2. Open it from any browser using the VPS IP:
    ```
    http://<IP_VPS>:8456/setup
    ```
    Example: `http://169.58.159.131:8456/setup`.
-3. The server defaults to `API_HOST=0.0.0.0` and `API_PORT=8456` (see `.env.example`) — make sure port **8456** is open in the VPS firewall/security group (e.g. `ufw allow 8456`, or your cloud provider panel).
+3. Make sure port **8456** is open in the VPS firewall/security group (e.g. `ufw allow 8456`, or your cloud provider panel). The API on 8457 is loopback-only.
 4. Get a token from **@BotFather** on Telegram, fill in the form (agent id, optional model, optional Telegram user ID to notify from @userinfobot), click **Save & Start Bot**. When the bot starts it sends an "agent ACTIVE" notice to that chat.
 
 The auto-setup validates the token via `getMe`, writes `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`, optional `TELEGRAM_CHAT_ID`), then starts the bot as a server background task. `/setup/status` shows the live status anytime.
@@ -64,13 +72,18 @@ The auto-setup validates the token via `getMe`, writes `.env` (`TELEGRAM_BOT_TOK
 ### 🚀 Deploy as a service (VPS/server, always-on)
 
 ```bash
-# systemd unit at /etc/systemd/system/aether.service
-systemctl enable --now aether.service   # start + auto-start on reboot
-systemctl status aether.service         # check status
-journalctl -u aether.service -f         # follow logs
+# systemd units: aether.service (FastAPI, internal) + aether-web.service (Next.js, public)
+systemctl enable --now aether.service        # start + auto-start on reboot
+systemctl enable --now aether-web.service    # Next.js console, public :8456
+systemctl status aether.service aether-web.service
+journalctl -u aether-web.service -f          # follow console logs
 ```
 
-The service runs `uvicorn aether.api.app:app --host 0.0.0.0 --port 8456` from `/root/aether` (reads `.env` if present) with `Restart=always`.
+`aether.service` runs `uvicorn aether.api.app:app --host 127.0.0.1 --port 8457` (reads `.env`), `Restart=always`. `aether-web.service` runs the Next.js standalone server (`web/.next/standalone/server.js`) with `PORT=8456` and `AETHER_API_BASE=http://127.0.0.1:8457`. After `npm run build`, copy the static assets into the standalone folder before deploying:
+
+```bash
+cd web && cp -r .next/static .next/standalone/.next/static
+```
 
 ## 📈 Evolution Roadmap
 - [x] v0.1 - Base Agent Runtime

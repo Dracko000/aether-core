@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   9Router palette — adopted from decolua/9router src/app/globals.css
+   Brand orange (light) / soft coral, neutral warm bases
+   ============================================================ */
+:root {
+  color-scheme: light;
+  /* Brand scale (light) - centered on #E56A4A */
+  --aether-brand-500: #e56a4a;
+  --aether-brand-600: #cc5236;
+  --aether-brand-700: #a64027;
+  /* Surfaces & backgrounds (light) */
+  --aether-bg: #fdfaf6;
+  --aether-bg-alt: #f7f3ee;
+  --aether-surface: #ffffff;
+  --aether-surface-2: #f4f4f5;
+  --aether-surface-3: #e7e7e9;
+  --aether-sidebar: rgba(244, 241, 236, 0.85);
+  /* Borders */
+  --aether-border: #e5e7eb;
+  --aether-border-subtle: #f1f1f3;
+  /* Text */
+  --aether-text-main: #0a0a0a;
+  --aether-text-muted: #6b7280;
+  --aether-text-subtle: #9ca3af;
+  /* Status */
+  --aether-success: #10b981;
+  --aether-danger: #cf222e;
+  --aether-warning: #f59e0b;
+  --aether-info: #3b82f6;
+  /* Radius */
+  --aether-radius: 10px;
+  --aether-radius-lg: 14px;
+  /* Shadows */
+  --elev-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+    0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 36px -8px rgba(15, 23, 42, 0.1);
+}
+
+.dark {
+  color-scheme: dark;
+  --aether-brand-500: #e56a4a;
+  --aether-brand-600: #cc5236;
+  --aether-brand-700: #a64027;
+  --aether-bg: #1a1a1a;
+  --aether-bg-alt: #1f1f1e;
+  --aether-surface: #262626;
+  --aether-surface-2: #303030;
+  --aether-surface-3: #3a3a3a;
+  --aether-sidebar: rgba(30, 30, 30, 0.85);
+  --aether-border: #333333;
+  --aether-border-subtle: #2a2a2a;
+  --aether-text-main: #ededed;
+  --aether-text-muted: #9ca3af;
+  --aether-text-subtle: #6b7280;
+  --aether-success: #22c55e;
+  --aether-danger: #ef4444;
+  --aether-warning: #fbbf24;
+  --aether-info: #60a5fa;
+  --elev-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 48px -8px rgba(0, 0, 0, 0.55);
+}
+
+@theme inline {
+  --color-bg: var(--aether-bg);
+  --color-bg-alt: var(--aether-bg-alt);
+  --color-surface: var(--aether-surface);
+  --color-surface-2: var(--aether-surface-2);
+  --color-surface-3: var(--aether-surface-3);
+  --color-sidebar: var(--aether-sidebar);
+  --color-line: var(--aether-border);
+  --color-line-subtle: var(--aether-border-subtle);
+  --color-main: var(--aether-text-main);
+  --color-muted: var(--aether-text-muted);
+  --color-subtle: var(--aether-text-subtle);
+  --color-brand: var(--aether-brand-500);
+  --color-brand-hover: var(--aether-brand-600);
+  --color-brand-deep: var(--aether-brand-700);
+  --color-ok: var(--aether-success);
+  --color-bad: var(--aether-danger);
+  --color-warn: var(--aether-warning);
+  --color-info: var(--aether-info);
+  --radius-brand: var(--aether-radius);
+  --radius-brand-lg: var(--aether-radius-lg);
+  --shadow-elev: var(--elev-shadow);
+  --shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-warm: 0 2px 12px -2px rgba(229, 106, 74, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "SF Pro Display", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: var(--aether-bg);
+  color: var(--aether-text-main);
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(229, 106, 74, 0.25);
+  color: var(--aether-brand-500);
+}
