@@ -45,7 +45,26 @@ class MemoryManager:
         # 4. Integrate recent episodic memories (L2)
         episodic = await self.l2.get_recent(agent_id, limit=5)
 
-        # 5. Context assembly
+        # 5. Integrate Collective Memory (v0.7 Swarm Intelligence)
+        # If the agent is part of an active coalition, we augment the context with shared fragments
+        collective_context = []
+        from aether.storage.repositories_collective import CollectiveRepository
+        collective_repo = CollectiveRepository(self.session)
+
+        # Find active coalitions the agent belongs to
+        # In a full implementation, we'd query CoalitionMember where agent_id = agent_id and status = 'ACTIVE'
+        # For now, we simulate retrieval of shared fragments relevant to the query
+        shared_fragments = await collective_repo.get_fragments_by_context("PUBLIC") # Fallback to public fragments
+        for frag in shared_fragments:
+            payload = frag.payload
+            collective_context.append({
+                "type": "collective",
+                "content": payload.get("content", "Shared fragment"),
+                "score": frag.importance,
+                "source_agent": frag.source_agent_id
+            })
+
+        # 6. Context assembly
         context = []
         for score, meta in agent_memories:
             context.append({"type": "semantic", "content": meta.get("content", ""), "score": score})
@@ -53,6 +72,9 @@ class MemoryManager:
         for entry in episodic:
             # Entry is a model instance
             context.append({"type": "episodic", "content": entry.event, "score": 1.0})
+
+        for entry in collective_context:
+            context.append(entry)
 
         return context
 

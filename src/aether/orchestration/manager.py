@@ -87,66 +87,71 @@ class OrchestrationManager:
 
             for agent in agents:
                 agent_id = agent.agent_id
-                if not self.runtime.is_agent_awake(agent_id):
-                    action = await goal_manager.get_next_autonomous_action(agent_id)
-                    if action:
-                        logger.info(f"Autonomous goal trigger for agent {agent_id}: {action['task']['action']}")
-                        await self.runtime.wake(agent_id)
+                try:
+                    if not self.runtime.is_agent_awake(agent_id):
+                        action = await goal_manager.get_next_autonomous_action(agent_id)
+                        if action:
+                            logger.info(f"Autonomous goal trigger for agent {agent_id}: {action['task']['action']}")
+                            await self.runtime.wake(agent_id)
 
-                        # Update drives based on the trigger
-                        # Simulation: If the action is 'SEARCH', increase Curiosity
-                        impact = {}
-                        if action['task']['action'] == "SEARCH":
-                            impact = {"curiosity": 0.1}
-                        elif action['task']['action'] == "SYNTHESIZE":
-                            impact = {"coherence": 0.1}
+                            # Update drives based on the trigger
+                            # Simulation: If the action is 'SEARCH', increase Curiosity
+                            impact = {}
+                            if action['task']['action'] == "SEARCH":
+                                impact = {"curiosity": 0.1}
+                            elif action['task']['action'] == "SYNTHESIZE":
+                                impact = {"coherence": 0.1}
 
-                        await drive_manager.update_drives(agent_id, action['task']['action'], impact)
-                        drives = await drive_manager.repo.get_drives(agent_id)
+                            await drive_manager.update_drives(agent_id, action['task']['action'], impact)
+                            drives = await drive_manager.repo.get_drives(agent_id)
 
-                        # Check if the task is a coalition task
-                        if action['task'].get("assignee") == "COALITION":
-                            # Logic for coalition task distribution
-                            from aether.cognitive.coalitions import CoalitionManager
-                            coal_mgr = CoalitionManager(session)
-                            logger.info(f"Dispatching coalition task {action['task']['task_id']} to group")
-                            # Distribution logic would go here
+                            # Check if the task is a coalition task
+                            if action['task'].get("assignee") == "COALITION":
+                                # Logic for coalition task distribution
+                                from aether.cognitive.coalitions import CoalitionManager
+                                coal_mgr = CoalitionManager(session)
+                                logger.info(f"Dispatching coalition task {action['task']['task_id']} to group")
+                                # Distribution logic would go here
 
-                        # Convert decomposed goal task into a system Task
-                        # Evaluate cognitive requirements for the target task
-                        from aether.model.capabilities import CapabilityMatrix
-                        from aether.model.migration import ModelMigrationManager
+                            # Convert decomposed goal task into a system Task
+                            # Evaluate cognitive requirements for the target task
+                            from aether.model.capabilities import CapabilityMatrix
+                            from aether.model.migration import ModelMigrationManager
 
-                        # Recalculate the best action now that drives have been updated
-                        action = await goal_manager.get_next_autonomous_action(agent_id, drives=drives)
-                        if not action:
-                            continue
+                            # Recalculate the best action now that drives have been updated
+                            action = await goal_manager.get_next_autonomous_action(agent_id, drives=drives)
+                            if not action:
+                                continue
 
-                        # Use the updated action for the rest of the loop
-                        task_payload = action['task']
-                        priority = action['priority']
+                            # Use the updated action for the rest of the loop
+                            task_payload = action['task']
+                            priority = action['priority']
 
-                        matrix = self.capability_matrix
-                        current_model = agent.model_id
-                        caps = matrix.get_capabilities(current_model) if matrix else None
+                            matrix = self.capability_matrix
+                            current_model = agent.model_id
+                            caps = matrix.get_capabilities(current_model) if matrix else None
 
-                        # Trigger autonomous evolution if reasoning capabilities are insufficient for complex tasks.
-                        # Current implementation uses a threshold of 3 for complex cognitive operations.
-                        if caps and caps.reasoning_level < 3 and task_payload['action'] in ["PLAN", "SYNTHESIZE", "SEARCH", "READ", "SUMMARIZE"]:
-                            logger.info(f"Capability gap detected for agent {agent_id}. Initiating model evolution...")
-                            # Task definitions should ideally specify required reasoning levels.
-                            best_model = self.capability_matrix.find_best_model({"reasoning_level": 3}) if self.capability_matrix else None
-                            if best_model and best_model != current_model:
-                                migration_mgr = ModelMigrationManager(self.runtime, self.capability_matrix)
-                                await migration_mgr.migrate_agent(agent_id, best_model)
-                                # Update local agent object to reflect model migration
-                                agent.model_id = best_model
+                            # Trigger autonomous evolution if reasoning capabilities are insufficient for complex tasks.
+                            # Current implementation uses a threshold of 3 for complex cognitive operations.
+                            if caps and caps.reasoning_level < 3 and task_payload['action'] in ["PLAN", "SYNTHESIZE", "SEARCH", "READ", "SUMMARIZE"]:
+                                logger.info(f"Capability gap detected for agent {agent_id}. Initiating model evolution...")
+                                # Task definitions should ideally specify required reasoning levels.
+                                best_model = self.capability_matrix.find_best_model({"reasoning_level": 3}) if self.capability_matrix else None
+                                if best_model and best_model != current_model:
+                                    migration_mgr = ModelMigrationManager(self.runtime, self.capability_matrix)
+                                    await migration_mgr.migrate_agent(agent_id, best_model)
+                                    # Update local agent object to reflect model migration
+                                    agent.model_id = best_model
 
-                        await self.assign_task(
-                            agent_id,
-                            payload=action['task'],
-                            priority=action['priority']
-                        )
+                            await self.assign_task(
+                                agent_id,
+                                payload=action['task'],
+                                priority=action['priority']
+                            )
+                except Exception as e:
+                    # Agents without an identity (or otherwise not ready for
+                    # autonomous activation) must not abort the whole cycle.
+                    logger.error(f"Failed autonomous wake for agent {agent_id}: {e}")
 
     async def send_agent_message(self, sender_id: str, receiver_id: str, content: str):
         """

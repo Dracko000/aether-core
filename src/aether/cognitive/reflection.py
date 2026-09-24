@@ -138,10 +138,9 @@ class ReflectionCycle:
         }
 
     async def _update(self, agent_id: str, synthesis: Dict[str, Any]) -> Dict[str, Any]:
-        """Persists the synthesis results to the agent's long-term cognitive state."""
+        """Persists the synthesis results to the agent's long-term cognitive state and updates emotions."""
 
         # Identify source nodes for the insight
-        # We use the associative_context passed from reflect()
         source_nodes = synthesis.get("associative_context", [])
         source_ids = [m["id"] for m in source_nodes if "id" in m]
 
@@ -151,6 +150,20 @@ class ReflectionCycle:
             confidence_delta=synthesis["confidence_delta"],
             source_ids=source_ids
         )
+
+        # Emotional Feedback Loop
+        from aether.cognitive.emotions import EmotionManager
+        emotion_mgr = EmotionManager(self.session)
+
+        action = synthesis.get("action", "REINFORCE")
+        if action == "REINFORCE":
+            # Success increases satisfaction, decreases frustration
+            await emotion_mgr.update_emotion(agent_id, "satisfaction", 0.1)
+            await emotion_mgr.update_emotion(agent_id, "frustration", -0.1)
+        elif action == "REVISE":
+            # Contradictions increase frustration and anxiety
+            await emotion_mgr.update_emotion(agent_id, "frustration", 0.1)
+            await emotion_mgr.update_emotion(agent_id, "anxiety", 0.05)
 
         return {
             "updated_belief_id": belief_id,

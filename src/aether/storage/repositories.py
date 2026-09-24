@@ -26,11 +26,44 @@ class IdentityRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, agent_id: str, name: str, role: str, personality: dict, skills: list):
-        identity = Identity(agent_id=agent_id, name=name, role=role, personality=personality, skills=skills)
+    async def create(self, agent_id: str, name: str, role: str, personality: dict, skills: list, core_values: list = None):
+        identity = Identity(
+            agent_id=agent_id,
+            name=name,
+            role=role,
+            personality=personality,
+            skills=skills,
+            core_values=core_values or [],
+        )
         self.session.add(identity)
         await self.session.commit()
         return identity
+
+    async def update_identity(self, agent_id: str, data: dict) -> Optional[dict]:
+        """
+        Upserts an agent identity. Updates the existing record in place when one
+        exists, otherwise creates it. Returns the resulting identity dict.
+        """
+        result = await self.session.execute(select(Identity).where(Identity.agent_id == agent_id))
+        identity = result.scalar_one_or_none()
+
+        if identity:
+            for key, value in data.items():
+                if hasattr(identity, key):
+                    setattr(identity, key, value)
+        else:
+            identity = Identity(
+                agent_id=agent_id,
+                name=data.get("name", "Unnamed"),
+                role=data.get("role", "Generalist"),
+                personality=data.get("personality", {}),
+                skills=data.get("skills", []),
+                core_values=data.get("core_values", []),
+            )
+            self.session.add(identity)
+
+        await self.session.commit()
+        return await self.get_by_id(agent_id)
 
     async def get_by_id(self, agent_id: str) -> Optional[dict]:
         result = await self.session.execute(select(Identity).where(Identity.agent_id == agent_id))
@@ -42,5 +75,6 @@ class IdentityRepository:
                 "role": identity.role,
                 "personality": identity.personality,
                 "skills": identity.skills,
+                "core_values": identity.core_values or [],
             }
         return None

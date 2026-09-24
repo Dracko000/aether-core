@@ -29,8 +29,8 @@ async def test_runtime_wake_sleep():
     await runtime.sleep("runtime_test_001")
     assert "runtime_test_001" not in runtime.active_agents
 
-    # 3. Verify persistence of IDLE state
+    # 3. Verify persistence of SLEEPING state
     async with AsyncSessionLocal() as session:
         agent_repo = AgentRepository(session)
         agent = await agent_repo.get("runtime_test_001")
-        assert agent.status == AgentState.IDLE.name
+        assert agent.status == AgentState.SLEEPING.name

@@ -32,4 +32,4 @@ async def test_runtime_integration_flow():
     async with AsyncSessionLocal() as session:
         agent_repo = AgentRepository(session)
         agent = await agent_repo.get(agent_id)
-        assert agent.status == AgentState.IDLE.name
+        assert agent.status == AgentState.SLEEPING.name

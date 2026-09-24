@@ -24,7 +24,12 @@ class BeliefManager:
     async def update_or_create_belief(self, agent_id: str, content: str, confidence_delta: float, source_ids: Optional[List[str]] = None) -> str:
         """
         Updates an existing belief based on new evidence or initializes a new belief.
-        Implements confidence adjustment: confidence = clamp(confidence + delta, 0, 1).
+
+        For an existing belief, ``confidence_delta`` is applied as an adjustment:
+        confidence = clamp(confidence + delta, 0, 1).
+
+        For a fresh belief, ``confidence_delta`` is interpreted as the target
+        absolute confidence of the new belief: confidence = clamp(delta, 0, 1).
         """
         # Identify similar beliefs via content analysis
         beliefs = await self.repo.get_beliefs(agent_id)
@@ -57,6 +62,6 @@ class BeliefManager:
         else:
             import uuid
             belief_id = f"belief_{uuid.uuid4().hex[:8]}"
-            # Initialize new belief with delta applied to base confidence of 0.5
-            await self.repo.create_belief(belief_id, agent_id, content, max(0.0, min(1.0, 0.5 + confidence_delta)), source_ids)
+            # Initialize a new belief at the requested confidence
+            await self.repo.create_belief(belief_id, agent_id, content, max(0.0, min(1.0, confidence_delta)), source_ids)
             return belief_id

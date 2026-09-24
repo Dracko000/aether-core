@@ -19,3 +19,12 @@ dev = [
     "black",
     "mypy",
 ]
+
+[tool.pytest.ini_options]
+# One event loop for the whole run. With function-scoped loops, shutting a
+# loop down while an aiosqlite connection thread is still alive orphans the
+# connection (the SQLite file stays locked in later tests). A single
+# session-scoped loop keeps every connection on a live loop, so sessions
+# close deterministically.
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"

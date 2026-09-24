@@ -40,7 +40,7 @@ async def test_runtime_state_transitions():
 
     async with AsyncSessionLocal() as session:
         agent = await AgentRepository(session).get(agent_id)
-        assert agent.status == AgentState.IDLE.name
+        assert agent.status == AgentState.SLEEPING.name
 
 @pytest.mark.asyncio
 async def test_wake_non_existent_agent():

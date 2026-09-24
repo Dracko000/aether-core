@@ -7,6 +7,11 @@ from aether.orchestration.tasks import TaskStatus
 
 @pytest.mark.asyncio
 async def test_orchestration_flow():
+    from aether.storage.database import init_db
+    # The full flow (wake -> task assign -> lifecycle transition) persists
+    # lifecycle events, so the schema must exist before the manager starts.
+    await init_db()
+
     # Initialize orchestration components
     runtime = AgentRuntime()
     manager = OrchestrationManager(runtime)

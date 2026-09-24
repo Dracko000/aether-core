@@ -29,3 +29,4 @@ class BeliefModel(Base):
 
     created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
     updated_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    last_verified: Mapped[float] = mapped_column(Float, nullable=True) # For meta-cognitive decay and auditing

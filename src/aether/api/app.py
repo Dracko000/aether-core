@@ -11,6 +11,7 @@ from aether.storage.database import AsyncSessionLocal
 from aether.storage.repositories import AgentRepository, IdentityRepository
 from aether.storage.repositories_goals import GoalRepository
 from aether.agent.lifecycle import AgentState
+from aether.api.routes import health, agents
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aether.api")
@@ -23,6 +24,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mounted routers
+app.include_router(health.router)
+app.include_router(agents.router, prefix="/agents")
 
 # Global State
 runtime = AgentRuntime()

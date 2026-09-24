@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Runtime data (created on demand by the engine/tests)
+*.db
+*.db-wal
+*.db-shm
+*.pkl
+tests/.test_data/
+data/sqlite/*.db
+data/vectors/*.pkl
+
+# Environment
+.env

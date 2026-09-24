@@ -19,6 +19,7 @@ class Identity(Base):
     role: Mapped[str] = mapped_column(String)
     personality: Mapped[dict] = mapped_column(JSON)
     skills: Mapped[list] = mapped_column(JSON)
+    core_values: Mapped[list] = mapped_column(JSON, default=lambda: []) # High-level ethical/priority principles
 
 class EpisodicMemory(Base):
     __tablename__ = "episodic_memories"

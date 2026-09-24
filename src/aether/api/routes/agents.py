@@ -10,6 +10,7 @@ class AgentCreate(BaseModel):
     role: str
     personality: dict
     skills: list
+    core_values: list = []
 
 router = APIRouter()
 
@@ -25,7 +26,8 @@ async def create_agent(agent_data: AgentCreate, db: AsyncSession = Depends(get_d
             agent_data.name,
             agent_data.role,
             agent_data.personality,
-            agent_data.skills
+            agent_data.skills,
+            core_values=agent_data.core_values
         )
         return {"status": "success", "agent_id": agent_data.agent_id}
     except Exception as e:

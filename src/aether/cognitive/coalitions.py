@@ -36,9 +36,14 @@ class CoalitionManager:
         logger.info(f"Coalition {coalition_id} formed for goal {goal_id}. Leader: {leader_id}")
         return coalition_id
 
-    async def disband_coalition(self, coalition_id: str):
-        """Terminates a coalition."""
-        # Implementation would update CoalitionModel status to DISBANDED
+    async def coordinate_swarm_reflection(self, coalition_id: str, goal_id: str, experience: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Triggers a collective reasoning cycle for the coalition.
+        """
+        from aether.cognitive.swarm import SwarmReflectionManager
+        # MemoryManager would be provided by the runtime/orchestrator
+        # For now we use a dummy or pass it in.
+        # Better to integrate this into OrchestrationManager.
         pass
 
     async def get_coalition_members(self, coalition_id: str) -> List[str]:

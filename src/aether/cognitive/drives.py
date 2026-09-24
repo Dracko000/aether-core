@@ -38,7 +38,7 @@ class DriveManager:
     def calculate_priority_weight(self, goal_type: str, drives: Dict[str, float]) -> float:
         """
         Calculates a priority multiplier based on the alignment between
-        the goal's nature and the agent's current drives.
+        the goal's nature and the agent's current drives, modulated by emotions.
         """
         # Mapping goal keywords to drives
         weights = {
@@ -50,14 +50,34 @@ class DriveManager:
         # Default weight is 1.0
         final_weight = 1.0
 
-        # Check if goal matches any drive keywords (simulated match for now)
-        # In a real system, goals would have explicit 'type' tags.
+        # Check if goal matches any drive keywords
         for drive, keywords in weights.items():
-            # We assume goal_type is the description or a tag
             if any(kw in goal_type.lower() for kw in keywords):
-                # Multiply by the drive level (0.0 - 1.0).
-                # Higher drive = higher weight = lower numeric priority value.
-                # We subtract the drive from 1.0 because low priority value = high importance.
-                final_weight *= (1.1 - drives.get(drive, 0.5))
+                # 1. Base Drive Weight
+                # Higher drive = lower numeric priority (more important)
+                base_weight = (1.1 - drives.get(drive, 0.5))
+
+                # 2. Emotional Modulation
+                # We import EmotionManager inside to avoid circular imports
+                from aether.cognitive.emotions import EmotionManager
+                # We use a dummy session or pass one in.
+                # Since this is a pure calculation, we can pass the modifier externally
+                # or calculate it here if we have the drives dict.
+
+                # Internal modulation logic (mirrors EmotionManager.get_emotion_modifier)
+                # Positive emotions (joy, satisfaction) boost priority -> lower weight.
+                # Negative emotions (frustration, anxiety) reduce priority -> higher weight.
+                modifier = 1.0
+                if drive == "curiosity":
+                    modifier -= drives.get("joy", 0.0) * 0.5
+                    modifier += drives.get("frustration", 0.0) * 0.3
+                elif drive == "coherence":
+                    modifier -= drives.get("satisfaction", 0.0) * 0.2
+                    modifier += drives.get("anxiety", 0.0) * 0.4
+                elif drive == "stability":
+                    modifier -= drives.get("anxiety", 0.0) * 0.6
+                    modifier += drives.get("joy", 0.0) * 0.2
+
+                final_weight *= (base_weight * max(0.5, min(2.0, modifier)))
 
         return final_weight

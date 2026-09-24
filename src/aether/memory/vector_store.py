@@ -22,7 +22,9 @@ class LocalVectorStore(VectorStore):
     Local vector storage implementation using NumPy for cosine similarity.
     Persists indices and vectors to disk via serialization.
     """
-    def __init__(self, storage_path: str = "./data/vectors/store.pkl"):
+    def __init__(self, storage_path: str = None):
+        if storage_path is None:
+            storage_path = os.environ.get("AETHER_VECTOR_STORE_PATH", "./data/vectors/store.pkl")
         self.storage_path = storage_path
         self.vectors = np.array([], dtype=np.float32).reshape(0, 0)
         self.metadata = []
