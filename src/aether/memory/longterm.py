@@ -11,13 +11,13 @@ class LongTermMemoryManager:
         self.session = session
 
     async def add(self, agent_id: str, fact: str, importance: float):
-        from datetime import datetime
+        from datetime import datetime, timezone
         # Persist memory record
         memory = LongTermMemory(
             agent_id=agent_id,
             fact=fact,
             importance=importance,
-            timestamp=datetime.utcnow().timestamp()
+            timestamp=datetime.now(timezone.utc).timestamp()
         )
         self.session.add(memory)
         await self.session.commit()

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 @dataclass
@@ -14,5 +14,5 @@ class AgentEvent:
     priority: int = 10 # Lower values indicate higher priority
     source: str = "system"
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: float = field(default_factory=lambda: datetime.utcnow().timestamp())
+    created_at: float = field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
     scheduled_at: Optional[float] = None

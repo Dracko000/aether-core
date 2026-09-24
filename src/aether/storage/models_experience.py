@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Text, Float, ForeignKey
 from aether.storage.models import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 class ExperienceNodeModel(Base):
     """
@@ -16,7 +16,7 @@ class ExperienceNodeModel(Base):
     embedding: Mapped[str] = mapped_column(Text, nullable=True) # Vector representation stored as JSON array
     
     importance: Mapped[float] = mapped_column(Float, default=1.0)
-    created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
 
 class ExperienceEdgeModel(Base):
     """

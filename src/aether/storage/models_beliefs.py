@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Text, Float, ForeignKey, Table, Column
 from aether.storage.models import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Association table for multi-node belief linking (Cognitive Insights)
 belief_experience_link = Table(
@@ -27,6 +27,6 @@ class BeliefModel(Base):
     # Now optional as multi-links are stored in belief_experience_link
     source_experience_id: Mapped[str] = mapped_column(String, nullable=True)
 
-    created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
-    updated_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    created_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
+    updated_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
     last_verified: Mapped[float] = mapped_column(Float, nullable=True) # For meta-cognitive decay and auditing

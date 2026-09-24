@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Float, ForeignKey, Text
 from aether.storage.models import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 class RelationshipModel(Base):
     """
@@ -19,4 +19,4 @@ class RelationshipModel(Base):
     relationship_type: Mapped[str] = mapped_column(String, default="NEUTRAL") # Category (e.g., ALLY, RIVAL, SUPERVISOR)
     
     notes: Mapped[str] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.utcnow().timestamp())
+    updated_at: Mapped[float] = mapped_column(Float, default=lambda: datetime.now(timezone.utc).timestamp())
