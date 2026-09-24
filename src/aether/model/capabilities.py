@@ -24,6 +24,10 @@ class CapabilityMatrix:
     def register_model(self, capabilities: ModelCapabilities):
         self._matrix[capabilities.model_id] = capabilities
 
+    def all_models(self) -> List[ModelCapabilities]:
+        """Return every registered model, in registration order."""
+        return list(self._matrix.values())
+
     def get_capabilities(self, model_id: str) -> Optional[ModelCapabilities]:
         return self._matrix.get(model_id)
 

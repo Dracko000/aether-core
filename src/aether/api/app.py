@@ -12,7 +12,8 @@ from aether.storage.database import AsyncSessionLocal
 from aether.storage.repositories import AgentRepository, IdentityRepository
 from aether.storage.repositories_goals import GoalRepository
 from aether.agent.lifecycle import AgentState
-from aether.api.routes import health, agents
+from aether.api.routes import health, agents, models
+from aether.model.factory import create_default_capability_matrix, build_model_manager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aether.api")
@@ -23,8 +24,13 @@ orch_manager = OrchestrationManager(runtime)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await orch_manager.start()
+    # Model backend (Ollama) worker is built here, inside the running loop.
+    app.state.model_manager = build_model_manager()
     logger.info("Aether Core API started")
     yield
+    model_manager = getattr(app.state, "model_manager", None)
+    if model_manager is not None:
+        await model_manager.shutdown()
     await orch_manager.stop()
     logger.info("Aether Core API stopped")
 
@@ -40,8 +46,13 @@ app.add_middleware(
 # Mounted routers
 app.include_router(health.router)
 app.include_router(agents.router, prefix="/agents")
+app.include_router(models.router, prefix="/models")
 
 # Global State (single instance; lifecycle handled by lifespan above)
+# Capability matrix is plain data (safe at import time). The ModelManager,
+# by contrast, spawns an asyncio worker task on construction, so it is built
+# inside the lifespan handler where a running event loop is guaranteed.
+capability_matrix = create_default_capability_matrix()
 # Schemas
 class MessageRequest(BaseModel):
     sender_id: str
