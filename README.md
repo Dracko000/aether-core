@@ -47,12 +47,17 @@ python -m aether.main
 ### 🤖 Telegram Bridge (Auto-Setup)
 Chat dengan agent Aether langsung dari Telegram — semua pesan diteruskan ke satu agent tetap dan dijawab lewat model lokal (Ollama).
 
-1. Start API server:
+1. Start API server di VPS/server (bind `0.0.0.0` agar bisa diakses publik):
    ```bash
    python -m uvicorn aether.api.app:app --host 0.0.0.0 --port 8456
    ```
-2. Buka **http://localhost:8456/setup** di browser.
-3. Dapatkan token dari **@BotFather** di Telegram, isi form (agent id, opsional model), klik **Save & Start Bot**.
+2. Akses dari browser mana pun via alamat IP VPS:
+   ```
+   http://<IP_VPS>:8456/setup
+   ```
+   Contoh: `http://169.58.159.131:8456/setup`.
+3. Server default memakai `API_HOST=0.0.0.0` dan `API_PORT=8456` (lihat `.env.example`) — pastikan port **8456** terbuka di firewall/security group VPS (mis. `ufw allow 8456`, atau panel cloud provider).
+4. Dapatkan token dari **@BotFather** di Telegram, isi form (agent id, opsional model), klik **Save & Start Bot**.
 
 Auto-setup memvalidasi token via `getMe`, menulis `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`), lalu menyalakan bot sebagai background task server. `/setup/status` menampilkan status kapan saja.
 
