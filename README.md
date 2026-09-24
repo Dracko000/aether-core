@@ -45,32 +45,32 @@ python -m aether.main
 ```
 
 ### 🤖 Telegram Bridge (Auto-Setup)
-Chat dengan agent Aether langsung dari Telegram — semua pesan diteruskan ke satu agent tetap dan dijawab lewat model lokal (Ollama).
+Chat with an Aether agent straight from Telegram — every message is routed to one fixed agent and answered by the local model (Ollama).
 
-1. Start API server di VPS/server (bind `0.0.0.0` agar bisa diakses publik):
+1. Start the API server on your VPS/server (bind `0.0.0.0` so it is publicly reachable):
    ```bash
    python -m uvicorn aether.api.app:app --host 0.0.0.0 --port 8456
    ```
-2. Akses dari browser mana pun via alamat IP VPS:
+2. Open it from any browser using the VPS IP:
    ```
    http://<IP_VPS>:8456/setup
    ```
-   Contoh: `http://169.58.159.131:8456/setup`.
-3. Server default memakai `API_HOST=0.0.0.0` dan `API_PORT=8456` (lihat `.env.example`) — pastikan port **8456** terbuka di firewall/security group VPS (mis. `ufw allow 8456`, atau panel cloud provider).
-4. Dapatkan token dari **@BotFather** di Telegram, isi form (agent id, opsional model), klik **Save & Start Bot**.
+   Example: `http://169.58.159.131:8456/setup`.
+3. The server defaults to `API_HOST=0.0.0.0` and `API_PORT=8456` (see `.env.example`) — make sure port **8456** is open in the VPS firewall/security group (e.g. `ufw allow 8456`, or your cloud provider panel).
+4. Get a token from **@BotFather** on Telegram, fill in the form (agent id, optional model), click **Save & Start Bot**.
 
-Auto-setup memvalidasi token via `getMe`, menulis `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`), lalu menyalakan bot sebagai background task server. `/setup/status` menampilkan status kapan saja.
+The auto-setup validates the token via `getMe`, writes `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`), then starts the bot as a server background task. `/setup/status` shows the live status anytime.
 
-### 🚀 Deploy sebagai service (VPS/server, agar selalu hidup)
+### 🚀 Deploy as a service (VPS/server, always-on)
 
 ```bash
-# systemd service ada di /etc/systemd/system/aether.service
-systemctl enable --now aether.service   # start + auto-start saat reboot
-systemctl status aether.service         # cek status
-journalctl -u aether.service -f         # ikuti log
+# systemd unit at /etc/systemd/system/aether.service
+systemctl enable --now aether.service   # start + auto-start on reboot
+systemctl status aether.service         # check status
+journalctl -u aether.service -f         # follow logs
 ```
 
-Service menjalankan `uvicorn aether.api.app:app --host 0.0.0.0 --port 8456` dari `/root/aether` (membaca `.env` bila ada) dengan `Restart=always`.
+The service runs `uvicorn aether.api.app:app --host 0.0.0.0 --port 8456` from `/root/aether` (reads `.env` if present) with `Restart=always`.
 
 ## 📈 Evolution Roadmap
 - [x] v0.1 - Base Agent Runtime

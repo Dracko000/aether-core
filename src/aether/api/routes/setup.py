@@ -146,13 +146,13 @@ _PAGE = """<!doctype html>
  .ok{color:#34d399}.err{color:#f87171}.info{color:#93c5fd}
 </style></head><body>
 <h1>⚡ Aether · Telegram Bot Auto-Setup</h1>
-<p class="info">1. Dapatkan token dari <b>@BotFather</b> · 2. Isi form · 3. Save &amp; Start — bot menyala sebagai background task server.</p>
-<div id="status" class="info">Memuat status…</div>
+<p class="info">1. Get a token from <b>@BotFather</b> · 2. Fill the form · 3. Save &amp; Start — the bot runs as a server background task.</p>
+<div id="status" class="info">Loading status…</div>
 <form id="setup"><label>Telegram Bot Token</label>
 <input name="telegram_token" placeholder="123456:ABC-DEF…" autocomplete="off" required>
-<label>Agent ID (semua chat diteruskan ke agent ini)</label>
+<label>Agent ID (all chats are routed to this agent)</label>
 <input name="agent_id" placeholder="aria" required>
-<label>Model (opsional — kosongkan untuk memakai OLLAMA_MODEL)</label>
+<label>Model (optional — leave empty to use OLLAMA_MODEL)</label>
 <input name="ollama_model" placeholder="qwen2.5:0.5b">
 <div><button type="submit">💾 Save &amp; Start Bot</button>
 <button type="button" class="secondary" id="stop">🛑 Stop Bot</button></div></form>
@@ -161,8 +161,8 @@ _PAGE = """<!doctype html>
  async function refresh(){
   const r=await fetch('/setup/status');const s=await r.json();
   document.getElementById('status').innerHTML=
-   `<b>Status:</b> bot ${s.bot_running?'<span class="ok">berjalan</span>':'<span class="err">mati</span>'}
-   · token ${s.token_configured?'<span class="ok">terpasang</span>':'<span class="err">belum</span>'} (${s.token_masked})
+   `<b>Status:</b> bot ${s.bot_running?'<span class="ok">running</span>':'<span class="err">stopped</span>'}
+   · token ${s.token_configured?'<span class="ok">configured</span>':'<span class="err">missing</span>'} (${s.token_masked})
    · agent <b>${s.agent_id}</b> · ollama <b>${s.ollama_model}</b> @ ${s.ollama_base_url}`;
  }
  async function post(body){
@@ -209,7 +209,7 @@ async def setup_apply(request: Request, req: SetupRequest):
 
         token_info = await check_telegram_token(req.telegram_token.strip())
         if not token_info["ok"]:
-            return {"ok": False, "error": f"Token ditolak Telegram: {token_info['detail']}"}
+            return {"ok": False, "error": f"Token rejected by Telegram: {token_info['detail']}"}
 
         agent_id = req.agent_id.strip() or settings.TELEGRAM_AGENT_ID
         updates = {
@@ -237,7 +237,7 @@ async def setup_apply(request: Request, req: SetupRequest):
             "bot_username": token_info.get("username"),
             "bot_name": token_info.get("name"),
             "agent_id": agent_id,
-            "note": "Token tersimpan di .env. Bot mulai polling di background.",
+            "note": "Token saved to .env. Bot is now polling in the background.",
         }
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("Setup failed")
