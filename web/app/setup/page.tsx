@@ -23,10 +23,27 @@ type Status = {
   ollama_base_url?: string | null;
   notify_configured?: boolean;
   notify_chat_id?: string | null;
+  model_provider?: string;
+  provider_label?: string;
+  model_name?: string;
+  provider_needs_key?: boolean;
+  provider_key_configured?: boolean;
+};
+
+type ProviderInfo = {
+  id: string;
+  display_name: string;
+  description: string;
+  kind: string;
+  needs_key: boolean;
+  key_configured: boolean;
+  base_url: string;
+  signup_url: string;
+  default_model: string;
 };
 
 const VIEW_META: Record<View, { icon: React.ReactNode; title: string; sub: string }> = {
-  overview: { icon: <GridIcon className="h-[22px] w-[22px]" />, title: "Overview", sub: "Telegram bridge · Ollama · one-time setup" },
+  overview: { icon: <GridIcon className="h-[22px] w-[22px]" />, title: "Overview", sub: "Telegram bridge · multi-provider · one-time setup" },
   setup: { icon: <GearIcon className="h-[22px] w-[22px]" />, title: "Setup", sub: "Configure once — then it just runs" },
   about: { icon: <InfoIcon className="h-[22px] w-[22px]" />, title: "About", sub: "Aether Core console" },
 };
@@ -44,10 +61,13 @@ export default function SetupPage() {
   const [result, setResult] = useState("– idle –");
   const [resultClass, setResultClass] = useState<"idle" | "ok" | "err">("idle");
   const [busy, setBusy] = useState(false);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [form, setForm] = useState({
     telegram_token: "",
     agent_id: "",
-    ollama_model: "",
+    provider: "",
+    model: "",
+    api_key: "",
     notify_chat_id: "",
   });
 
@@ -55,18 +75,22 @@ export default function SetupPage() {
     setForm((f) => ({
       ...f,
       agent_id: f.agent_id || s.agent_id || "",
-      ollama_model:
-        f.ollama_model ||
-        (s.ollama_model && s.ollama_model !== "llama3" ? s.ollama_model : ""),
+      provider: f.provider || s.model_provider || "ollama",
+      model: f.model || s.model_name || "",
       notify_chat_id: f.notify_chat_id || (s.notify_configured ? s.notify_chat_id || "" : ""),
     }));
   }, []);
 
   const refresh = useCallback(async () => {
     try {
-      const r = await fetch("/setup/status", { cache: "no-store" });
-      const s: Status = await r.json();
+      const [sr, pr] = await Promise.all([
+        fetch("/setup/status", { cache: "no-store" }),
+        fetch("/setup/providers", { cache: "no-store" }),
+      ]);
+      const s: Status = await sr.json();
+      const p = await pr.json();
       setStatus(s);
+      setProviders(Array.isArray(p?.providers) ? p.providers : []);
       prefilled(s);
     } catch {
       setStatus(null);
@@ -233,6 +257,7 @@ export default function SetupPage() {
               onStop={onStop}
               result={result}
               resultClass={resultClass}
+              providers={providers}
             />
           )}
           {view === "about" && <About />}
@@ -318,10 +343,11 @@ function Overview({ status, on, tokenOk }: { status: Status | null; on: boolean;
         <div className="rounded-brand-lg border border-line-subtle bg-surface p-5 shadow-elev">
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Model</h3>
           <div className="mt-3 font-mono text-xl font-bold tracking-tight">
-            {status?.ollama_model || "—"}
+            {status?.model_name || status?.ollama_model || "—"}
           </div>
           <p className="mt-1.5 text-xs text-muted">
-            backend <b className="text-main">Ollama</b> · local, no API key
+            provider <b className="text-main">{status?.provider_label || status?.model_provider || "—"}</b>
+            {status?.provider_key_configured ? " · key ✓" : status?.provider_needs_key ? " · no key yet" : " · local"}
           </p>
           <div className="mt-3 flex justify-between gap-2 text-xs text-muted">
             <span>Base URL</span>
@@ -398,17 +424,34 @@ function SetupView({
   onStop,
   result,
   resultClass,
+  providers,
 }: {
-  form: { telegram_token: string; agent_id: string; ollama_model: string; notify_chat_id: string };
+  form: {
+    telegram_token: string;
+    agent_id: string;
+    provider: string;
+    model: string;
+    api_key: string;
+    notify_chat_id: string;
+  };
   setForm: React.Dispatch<React.SetStateAction<typeof form>>;
   busy: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onStop: () => void;
   result: string;
   resultClass: "idle" | "ok" | "err";
+  providers: ProviderInfo[];
 }) {
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set =
+    (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const activeProvider = providers.find((p) => p.id === form.provider);
+  const needsKey = activeProvider?.needs_key ?? false;
+
+  const inputCls =
+    "mt-1.5 w-full rounded-brand border border-line bg-bg px-3 py-2 font-mono text-[13px] text-main outline-none transition-shadow focus:border-brand focus:ring-[3px] focus:ring-brand/15";
 
   return (
     <section>
@@ -462,17 +505,74 @@ function SetupView({
         />
 
         <label className="mt-3 block text-[12.5px] font-semibold text-muted">
+          Model Provider
+          <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
+            local Ollama or a remote API (key required)
+          </span>
+        </label>
+        <select
+          value={form.provider}
+          onChange={set("provider")}
+          className="mt-1.5 w-full rounded-brand border border-line bg-bg px-3 py-2 text-[13px] text-main outline-none transition-shadow focus:border-brand focus:ring-[3px] focus:ring-brand/15"
+        >
+          {providers.length === 0 && <option value="">Loading providers…</option>}
+          {providers.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.display_name}
+              {p.needs_key ? (p.key_configured ? " · key ✓" : " · needs key") : " · local"}
+            </option>
+          ))}
+        </select>
+        {activeProvider && activeProvider.needs_key && (
+          <p className="mt-1 text-[11.5px] text-subtle">
+            {activeProvider.description} — get a key at{" "}
+            {activeProvider.signup_url ? (
+              <a
+                className="text-brand underline-offset-2 hover:underline"
+                href={activeProvider.signup_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {activeProvider.signup_url}
+              </a>
+            ) : (
+              "its console"
+            )}
+          </p>
+        )}
+
+        <label className="mt-3 block text-[12.5px] font-semibold text-muted">
           Model
           <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
-            optional — leave empty to use OLLAMA_MODEL
+            optional — empty = {activeProvider?.default_model || "provider default"}
           </span>
         </label>
         <input
-          value={form.ollama_model}
-          onChange={set("ollama_model")}
-          placeholder="qwen2.5:0.5b"
-          className="mt-1.5 w-full rounded-brand border border-line bg-bg px-3 py-2 font-mono text-[13px] text-main outline-none transition-shadow focus:border-brand focus:ring-[3px] focus:ring-brand/15"
+          value={form.model}
+          onChange={set("model")}
+          placeholder={activeProvider?.default_model || "qwen2.5:0.5b / gpt-4o-mini"}
+          className={inputCls}
         />
+
+        {needsKey && (
+          <>
+            <label className="mt-3 block text-[12.5px] font-semibold text-muted">
+              Provider API Key
+              <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
+                {activeProvider?.key_configured
+                  ? "a key is already configured — leave blank to keep it"
+                  : "required for this provider"}
+              </span>
+            </label>
+            <input
+              value={form.api_key}
+              onChange={set("api_key")}
+              placeholder={`${activeProvider?.key_configured ? "sk-•••• (keep existing)" : "sk-…"}`}
+              autoComplete="off"
+              className={inputCls}
+            />
+          </>
+        )}
 
         <label className="mt-3 block text-[12.5px] font-semibold text-muted">
           Telegram user ID to notify when active
@@ -536,11 +636,12 @@ function About() {
           Aether Core · v0.1.0
         </h3>
         <p className="mt-3 text-[13.5px] leading-relaxed text-muted">
-          Local agent runtime: one fixed agent answers every Telegram message through the cognitive
-          engine, backed by a fully local model (Ollama) — no API keys, no cloud. Setup happens once
-          via the <b className="text-main">Setup</b> tab; this console (9Router-style shell, built
-          with Next.js) then monitors the live bridge. Docs and deploy notes live in the project
-          README.
+          Local-first agent runtime: one fixed agent answers every Telegram message through the
+          cognitive engine, backed by a local model (Ollama) or a remote provider (OpenAI,
+          Anthropic, OpenRouter, Groq, DeepSeek, xAI, Gemini) — mix-and-match from the Setup tab.
+          Setup happens once via the <b className="text-main">Setup</b> tab; this console
+          (9Router-style shell, built with Next.js) then monitors the live bridge. Docs and deploy
+          notes live in the project README.
         </p>
       </div>
     </section>

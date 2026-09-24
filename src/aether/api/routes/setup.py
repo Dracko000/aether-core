@@ -113,6 +113,9 @@ class SetupRequest(BaseModel):
     agent_id: str = "aria"
     ollama_model: str = ""
     notify_chat_id: str = ""
+    provider: str = ""        # model provider id (default: keep current)
+    model: str = ""           # concrete model name (default: keep current)
+    api_key: str = ""         # only needed when switching to a keyed provider
     action: str = "start"  # "start" | "stop"
 
 
@@ -124,6 +127,10 @@ def _status(app) -> dict:
         masked = f"{token[:5]}…{token[-4:]}" if len(token) > 10 else "(set)"
     chat_id = settings.TELEGRAM_CHAT_ID.strip()
     bot = getattr(app.state, "telegram_bot", None)
+    from aether.model.factory import effective_model_name
+    from aether.model.providers import get_provider
+
+    provider = get_provider(settings.MODEL_PROVIDER)
     return {
         "telegram_enabled": settings.TELEGRAM_ENABLED,
         "token_configured": bool(token),
@@ -134,7 +141,24 @@ def _status(app) -> dict:
         "bot_running": bot is not None,
         "notify_configured": bool(chat_id),
         "notify_chat_id": chat_id if len(chat_id) <= 12 else f"{chat_id[:3]}…{chat_id[-2:]}",
+        # model provider routing
+        "model_provider": settings.MODEL_PROVIDER,
+        "provider_label": provider.display_name if provider else settings.MODEL_PROVIDER,
+        "model_name": effective_model_name(),
+        "provider_needs_key": bool(provider and provider.api_key_env),
+        "provider_key_configured": bool(
+            provider and (os.environ.get(provider.api_key_env) or settings.PROVIDER_API_KEY)
+        ),
+        "allowlist_active": bool(settings.TELEGRAM_ALLOWED_USERS.strip()),
     }
+
+
+@router.get("/setup/providers")
+async def setup_providers():
+    """Public provider catalogue for the console (never includes keys)."""
+    from aether.model.providers import provider_options
+
+    return {"providers": provider_options()}
 
 
 _PAGE = """<!doctype html>
@@ -380,8 +404,12 @@ _PAGE = """<!doctype html>
      <input name="telegram_token" id="inp-token" placeholder="123456:ABC-DEF…" autocomplete="off" required>
      <label>Agent ID<span class="hint">all chats are routed to this agent</span></label>
      <input name="agent_id" id="inp-agent" placeholder="aria" required>
-     <label>Model<span class="hint">optional — leave empty to use OLLAMA_MODEL</span></label>
-     <input name="ollama_model" id="inp-model" placeholder="qwen2.5:0.5b">
+     <label>Model Provider<span class="hint">local Ollama or a remote API</span></label>
+     <select name="provider" id="inp-provider"></select>
+     <label>Model<span class="hint">optional — empty = provider default</span></label>
+     <input name="model" id="inp-model" placeholder="e.g. qwen2.5:0.5b / gpt-4o-mini">
+     <label>Provider API Key<span class="hint">remote providers only</span></label>
+     <input name="api_key" id="inp-apikey" placeholder="sk-…" autocomplete="off">
      <label>Telegram user ID to notify when active<span class="hint">optional — get yours from @userinfobot</span></label>
      <input name="notify_chat_id" id="inp-notify" placeholder="123456789" autocomplete="off">
      <div class="btnrow">
@@ -398,9 +426,10 @@ _PAGE = """<!doctype html>
      <div class="card" style="grid-column:1/-1">
       <h3>Aether Core · v0.1.0</h3>
       <p style="margin-top:12px;font-size:13.5px;color:var(--color-text-muted);line-height:1.65">
-       Local agent runtime: one fixed agent answers every Telegram message through the
-       cognitive engine, backed by a fully local model (Ollama) — no API keys, no cloud.
-       Setup happens once via the <b style="color:var(--color-text-main)">Setup</b> tab; this console
+       Local-first agent runtime: one fixed agent answers every Telegram message through the
+       cognitive engine, backed by a local model (Ollama) or a remote provider (OpenAI,
+       Anthropic, OpenRouter, Groq, DeepSeek, xAI, Gemini) — mix-and-match from the Setup tab.
+       Setup happens once here; this console
        (9Router-style shell) then monitors the live bridge. Docs and deploy notes live in the project README.</p>
      </div>
     </div>
@@ -411,6 +440,7 @@ _PAGE = """<!doctype html>
 <script>
  const VIEWS=['overview','setup','about'];
  const topStatus=document.getElementById('top-status');
+ let chosenProvider=null;
  const titles={overview:['Overview','Telegram bridge · Ollama · one-time setup'],
    setup:['Setup','Configure once — then it just runs'],
    about:['About','Aether Core console']};
@@ -438,7 +468,7 @@ _PAGE = """<!doctype html>
    ?'<span class="badge ok"><span class="dot"></span>Running</span>':'<span class="badge bad"><span class="dot"></span>Stopped</span>';
   document.getElementById('val-bot-agent').textContent=s.token_configured
    ?'agent '+s.agent_id+' · token '+s.token_masked:'agent '+s.agent_id+' · no token';
-  document.getElementById('val-model').textContent=s.ollama_model||'—';
+  document.getElementById('val-model').textContent=(s.provider_label||s.model_provider||'—')+' · '+(s.model_name||'—');
   document.getElementById('val-ollama').textContent=s.ollama_base_url||'—';
   document.getElementById('val-token').innerHTML=s.token_configured
    ?'<span class="badge ok">Configured</span>':'<span class="badge bad">Missing</span>';
@@ -448,8 +478,23 @@ _PAGE = """<!doctype html>
   document.getElementById('setup-banner').style.display=(!s.token_configured||!s.bot_running)?'flex':'none';
   document.getElementById('live-banner').style.display=(s.token_configured&&s.bot_running)?'flex':'none';
   document.getElementById('inp-agent').value=s.agent_id||'';
-  document.getElementById('inp-model').value=(s.ollama_model&&s.ollama_model!=='llama3')?s.ollama_model:'';
+  document.getElementById('inp-model').value=s.model_name||'';
   document.getElementById('inp-notify').value=s.notify_configured?s.notify_chat_id:'';
+  const sel=document.getElementById('inp-provider');
+  if(sel){
+   if(sel.options.length===0){
+    try{
+     const p=await (await fetch('/setup/providers')).json();
+     p.providers.forEach(pr=>{
+      const o=document.createElement('option');
+      o.value=pr.id;o.textContent=pr.display_name+(pr.key_configured?' ✓':'')+(pr.needs_key?' ⚠':' · local');
+      sel.appendChild(o);
+     });
+    }catch(e){}
+    sel.onchange=()=>{chosenProvider=sel.value;};
+   }
+   sel.value=chosenProvider||s.model_provider||'ollama';
+  }
  }
  function setChip(el,cls,txt){el.className='status-chip '+cls;el.innerHTML='<span class="dot"></span>'+txt;}
 
@@ -460,7 +505,8 @@ _PAGE = """<!doctype html>
  document.getElementById('setup').onsubmit=async e=>{
   e.preventDefault();const f=new FormData(e.target);
   const j=await post({telegram_token:f.get('telegram_token'),agent_id:f.get('agent_id'),
-    ollama_model:f.get('ollama_model'),notify_chat_id:f.get('notify_chat_id'),action:'start'});
+    ollama_model:f.get('ollama_model'),provider:f.get('provider'),model:f.get('model'),
+    api_key:f.get('api_key'),notify_chat_id:f.get('notify_chat_id'),action:'start'});
   const el=document.getElementById('result');
   el.textContent=JSON.stringify(j,null,2);
   el.className=j.ok?'ok':'err';
@@ -528,6 +574,38 @@ async def setup_apply(request: Request, req: SetupRequest):
         if notify_chat_id:
             updates["TELEGRAM_CHAT_ID"] = notify_chat_id
 
+        # Model provider routing (optional — defaults keep the current config).
+        from aether.model.providers import get_provider, provider_options
+
+        provider_id = (req.provider or settings.MODEL_PROVIDER or "ollama").lower().strip()
+        profile = get_provider(provider_id)
+        if profile is None:
+            known = ", ".join(p["id"] for p in provider_options())
+            return {"ok": False, "error": f"Unknown provider {provider_id!r}. Known: {known}"}
+
+        provider_changed = settings.MODEL_PROVIDER != provider_id
+        model_changed = False
+        if provider_id == "ollama" and req.model.strip():
+            updates["MODEL_NAME"] = req.model.strip()
+            model_changed = settings.MODEL_NAME != req.model.strip()
+        elif provider_id != "ollama":
+            if req.model.strip():
+                updates["MODEL_NAME"] = req.model.strip()
+                model_changed = settings.MODEL_NAME != req.model.strip()
+            if profile.api_key_env:
+                key = (req.api_key or "").strip()
+                if key:
+                    updates[profile.api_key_env] = key
+                elif not (os.environ.get(profile.api_key_env) or settings.PROVIDER_API_KEY):
+                    return {
+                        "ok": False,
+                        "error": (
+                            f"Provider {profile.display_name} needs an API key "
+                            f"(env {profile.api_key_env}) — get one at {profile.signup_url or 'its console'}."
+                        ),
+                    }
+        updates["MODEL_PROVIDER"] = provider_id
+
         write_env(updates)
 
         # Reflect the new values in the in-process singleton immediately.
@@ -536,10 +614,27 @@ async def setup_apply(request: Request, req: SetupRequest):
         settings.TELEGRAM_ENABLED = True
         if req.ollama_model.strip():
             settings.OLLAMA_MODEL = req.ollama_model.strip()
+        settings.MODEL_PROVIDER = provider_id
+        if "MODEL_NAME" in updates:
+            settings.MODEL_NAME = updates["MODEL_NAME"]
+        if profile.api_key_env and updates.get(profile.api_key_env):
+            os.environ[profile.api_key_env] = updates[profile.api_key_env]
         if notify_chat_id:
             settings.TELEGRAM_CHAT_ID = notify_chat_id
 
+        # Rebuild the model stack when provider/model switched so the bot (and
+        # engine) talk to the newly selected backend.
         model_manager = getattr(app.state, "model_manager", None)
+        if provider_changed or model_changed:
+            from aether.model.factory import build_model_manager
+
+            if model_manager is not None:
+                await model_manager.shutdown()
+            model_manager = build_model_manager()
+            app.state.model_manager = model_manager
+
+        from aether.model.factory import effective_model_name
+
         bot = await start_bot_in_app(app, settings.TELEGRAM_BOT_TOKEN, agent_id, model_manager)
         result = {
             "ok": True,
@@ -547,7 +642,9 @@ async def setup_apply(request: Request, req: SetupRequest):
             "bot_username": token_info.get("username"),
             "bot_name": token_info.get("name"),
             "agent_id": agent_id,
-            "note": "Token saved to .env. Bot is now polling in the background.",
+            "model_provider": provider_id,
+            "model_name": effective_model_name(),
+            "note": "Config saved to .env. Bot is now polling in the background.",
         }
 
         # Notify the owner that the agent is now active.
@@ -556,7 +653,8 @@ async def setup_apply(request: Request, req: SetupRequest):
                 await bot.send_message(
                     notify_chat_id,
                     f"✅ Aether agent '<b>{agent_id}</b>' is now <b>ACTIVE</b>.\n"
-                    f"Model: {settings.OLLAMA_MODEL} · Chat ready — send me a message!",
+                    f"Provider: <b>{provider_id}</b> · Model: <b>{effective_model_name()}</b>\n"
+                    f"Chat ready — send me a message!",
                 )
                 result["notification"] = f"activation notice sent to chat {notify_chat_id}"
             except Exception as exc:  # invalid chat id, bot restrictions, …

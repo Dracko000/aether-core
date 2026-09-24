@@ -69,6 +69,17 @@ class OrchestrationManager:
 
                     await event_repo.delete_event(event.event_id)
 
+                except ValueError as e:
+                    # Agent does not exist (e.g. a message addressed to a
+                    # Telegram-only agent id the runtime has no identity for).
+                    # This is permanent — drop the event instead of retrying
+                    # it forever on every 5s wake cycle.
+                    logger.warning(
+                        "Dropping wake event %s for unknown agent %s: %s",
+                        event.event_id, agent_id, e,
+                    )
+                    await event_repo.delete_event(event.event_id)
+
                 except Exception as e:
                     logger.error(f"Failed to wake agent {agent_id} for event {event.event_id}: {e}")
 

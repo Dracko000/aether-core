@@ -45,13 +45,13 @@ python -m aether.main
 ```
 
 ### 🤖 Telegram Bridge (Auto-Setup)
-Chat with an Aether agent straight from Telegram — every message is routed to one fixed agent and answered by the local model (Ollama).
+Chat with an Aether agent straight from Telegram — every message is routed to one fixed agent and answered by the configured model backend.
 
 The console is a **Next.js app** (`web/`, 9Router-style shell). It is the only public surface; it proxies to the FastAPI backend (bot + engine) which runs on loopback:
 
 | Service | Address | Role |
 |---|---|---|
-| `aether-web` (Next.js) | `0.0.0.0:8456` (public) | Console at `/setup`, proxies `/setup/status` + `/api/setup` |
+| `aether-web` (Next.js) | `0.0.0.0:8456` (public) | Console at `/setup`, proxies `/setup/status`, `/setup/providers` + `/api/setup` |
 | `aether.service` (FastAPI) | `127.0.0.1:8457` (internal) | Bot polling, engine, writes `.env` |
 
 1. Start the backend, then the web console:
@@ -65,9 +65,49 @@ The console is a **Next.js app** (`web/`, 9Router-style shell). It is the only p
    ```
    Example: `http://169.58.159.131:8456/setup`.
 3. Make sure port **8456** is open in the VPS firewall/security group (e.g. `ufw allow 8456`, or your cloud provider panel). The API on 8457 is loopback-only.
-4. Get a token from **@BotFather** on Telegram, fill in the form (agent id, optional model, optional Telegram user ID to notify from @userinfobot), click **Save & Start Bot**. When the bot starts it sends an "agent ACTIVE" notice to that chat.
+4. Get a token from **@BotFather** on Telegram, fill in the form (agent id, optional provider + model + API key, optional Telegram user ID to notify from @userinfobot), click **Save & Start Bot**. When the bot starts it sends an "agent ACTIVE" notice to that chat.
 
-The auto-setup validates the token via `getMe`, writes `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`, optional `TELEGRAM_CHAT_ID`), then starts the bot as a server background task. `/setup/status` shows the live status anytime.
+The auto-setup validates the token via `getMe`, writes `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`, `MODEL_PROVIDER`, optional `MODEL_NAME` + provider API key, optional `TELEGRAM_CHAT_ID`), rebuilds the model stack if the provider/model changed, then starts the bot as a server background task. `/setup/status` shows the live status anytime.
+
+### 🧠 Model Providers (local + remote)
+
+Adapted from the Hermes Agent plugin layout (`plugins/model-providers/`): providers are registry entries in `src/aether/model/providers.py`, each carrying its display metadata, base URL, API-key env var and catalogue URL. The engine talks to every provider through one `ModelAdapter` interface (`src/aether/model/adapter.py`), so switching providers never touches the cognitive pipeline.
+
+| Provider | kind | Env key | Notes |
+|---|---|---|---|
+| `ollama` | local | — | No key. Default `OLLAMA_MODEL` on `OLLAMA_BASE_URL`. |
+| `openai` | openai-compat | `OPENAI_API_KEY` | GPT via api.openai.com |
+| `openrouter` | openai-compat | `OPENROUTER_API_KEY` | 300+ models behind one API |
+| `groq` | openai-compat | `GROQ_API_KEY` | Fast LPU inference (Llama, Mixtral) |
+| `deepseek` | openai-compat | `DEEPSEEK_API_KEY` | chat & reasoner models |
+| `xai` | openai-compat | `XAI_API_KEY` | Grok models |
+| `gemini` | openai-compat | `GEMINI_API_KEY` | Google's OpenAI-compatible endpoint |
+| `anthropic` | anthropic | `ANTHROPIC_API_KEY` | Claude via native Messages API |
+
+Switching is done entirely from the console **Setup** tab: pick the provider, enter the model (empty = provider default) and the API key. Or set the env vars below in `.env` directly:
+
+```
+MODEL_PROVIDER=openrouter
+MODEL_NAME=anthropic/claude-3.5-sonnet
+OPENROUTER_API_KEY=...
+```
+
+### 🤖 Telegram interaction (adapted from Hermes gateway)
+
+The bot bridge (`src/aether/bot/telegram.py`) mirrors the Hermes Agent Telegram adapter patterns (`plugins/platforms/telegram/adapter.py` + `gateway/assets/status_phrases.yaml`):
+
+- **Typing indicator** re-armed every 4 s while the engine works.
+- **Patience message** — a casual *"still working on it…"* note after 6 s for slow inferences, edited in place with the real answer when it lands (phrase bank from Hermes' `status_phrases.yaml`).
+- **Chunking** — long answers split under Telegram's 4096-char limit with `(1/2)` markers.
+- **HTML-safe replies** (escaped), **reply-to** the user's message.
+- **Slash commands**: `/start`, `/help`, `/status` (provider · model · engine · memory), `/model`, `/new` (clear chat history), `/about`.
+- **Per-chat multi-turn history** — the last 8 exchanges are woven into the engine prompt for conversation continuity.
+- **Allowlist** — `TELEGRAM_ALLOWED_USERS` (comma-separated user IDs); everyone else gets a polite refusal. `TELEGRAM_ALLOW_ALL_USERS=true` bypasses (dev only).
+
+```
+TELEGRAM_ALLOWED_USERS=123456789,987654321
+TELEGRAM_ALLOW_ALL_USERS=false
+```
 
 ### 🚀 Deploy as a service (VPS/server, always-on)
 

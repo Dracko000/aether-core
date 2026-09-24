@@ -21,20 +21,35 @@ class CognitiveEngine:
             return CognitivePath(path_type="FAST")
         return CognitivePath(path_type="SLOW")
 
-    async def execute(self, agent_id: str, query: str) -> str:
+    async def execute(
+        self, agent_id: str, query: str, history: Optional[list] = None
+    ) -> str:
         path = await self.decide_path(agent_id, query)
 
         if path.path_type == "FAST":
-            return await self._fast_path(agent_id, query)
+            return await self._fast_path(agent_id, query, history)
         else:
-            return await self._slow_path(agent_id, query)
+            return await self._slow_path(agent_id, query, history)
 
-    async def _fast_path(self, agent_id: str, query: str) -> str:
+    @staticmethod
+    def _format_history(history: Optional[list]) -> str:
+        """Render recent (role, text) turns as a compact preamble."""
+        if not history:
+            return ""
+        lines = ["Chat history (most recent first):"]
+        for role, text in list(history)[-8:]:
+            lines.append(f"{role}: {text}")
+        return "\n".join(lines) + "\n\n"
+
+    async def _fast_path(self, agent_id: str, query: str, history: Optional[list] = None) -> str:
         # Input -> Context -> Memory -> Model -> Response
         context = await self.memory_manager.retrieve(agent_id, query)
 
         # Construct prompt with context
-        prompt = f"Context: {context}\n\nQuery: {query}\n\nResponse:"
+        prompt = (
+            f"{self._format_history(history)}"
+            f"Context: {context}\n\nQuery: {query}\n\nResponse:"
+        )
 
         # Use model manager for inference
         return await self.model_manager.request(
@@ -42,14 +57,17 @@ class CognitiveEngine:
             func=lambda: self.model_manager.adapter.generate(prompt)
         )
 
-    async def _slow_path(self, agent_id: str, query: str) -> str:
+    async def _slow_path(self, agent_id: str, query: str, history: Optional[list] = None) -> str:
         # Input -> Memory -> Reasoning -> Planning -> Tool -> Observation -> Verification -> Reflection -> Response
         # For the MVP, this will be a skeleton of the loop
         context = await self.memory_manager.retrieve(agent_id, query)
 
         # 1. Reasoning/Planning phase
         # (Simplified for now: just a direct generation)
-        prompt = f"Context: {context}\n\nComplex Query: {query}\n\nPlan your approach and execute."
+        prompt = (
+            f"{self._format_history(history)}"
+            f"Context: {context}\n\nComplex Query: {query}\n\nPlan your approach and execute."
+        )
 
         return await self.model_manager.request(
             priority=3,

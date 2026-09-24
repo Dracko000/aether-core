@@ -30,11 +30,12 @@ def test_register_default_models_populates_matrix():
     assert matrix.find_best_model({"reasoning_level": 1, "max_context": 32768}) == "qwen2.5:7b"
 
 
-def test_select_model_for_falls_back_to_configured_default():
+def test_select_model_for_falls_back_to_configured_default(monkeypatch):
     """Requirement no registered model meets → configured default, if registered."""
+    monkeypatch.setattr(settings, "OLLAMA_MODEL", "llama3")  # a registered model
     # llama3:70b has max_context 8192 < 200000, so nothing matches.
     result = select_model_for({"reasoning_level": 3, "max_context": 200000})
-    assert result == settings.OLLAMA_MODEL  # "llama3" is registered → fallback
+    assert result == "llama3"  # falls back to the configured default
 
 
 def test_select_model_for_raises_when_default_unregistered(monkeypatch):

@@ -7,10 +7,18 @@ run the same path: retrieve agent memory, then ask the model backend
 from typing import Optional
 
 
-async def run_cognitive_query(agent_id: str, query: str, model_manager) -> Optional[str]:
+async def run_cognitive_query(
+    agent_id: str,
+    query: str,
+    model_manager,
+    history: Optional[list] = None,
+) -> Optional[str]:
     """Run the agent's cognitive engine (memory retrieval + inference).
 
-    Returns the model answer, or ``None`` when no model backend is available.
+    ``history`` is an optional list of ``(role, text)`` turns from the current
+    chat that are woven into the prompt (multi-turn continuity, e.g. the
+    Telegram bridge). Returns the model answer, or ``None`` when no model
+    backend is available.
     """
     from aether.memory.vector_store import LocalVectorStore
     from aether.memory.manager import MemoryManager
@@ -25,4 +33,4 @@ async def run_cognitive_query(agent_id: str, query: str, model_manager) -> Optio
             model_manager=model_manager,
         )
         engine = CognitiveEngine(model_manager, memory_manager)
-        return await engine.execute(agent_id=agent_id, query=query)
+        return await engine.execute(agent_id=agent_id, query=query, history=history)

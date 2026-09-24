@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from aether.api.app import app
+from aether.config import settings
 
 client = TestClient(app)
 
@@ -31,4 +32,4 @@ def test_models_select_fallback_to_default():
     """Unmeetable requirements fall back to the configured default model."""
     response = client.get("/models/select", params={"reasoning_level": 3, "max_context": 200000})
     assert response.status_code == 200
-    assert response.json()["model_id"] == "llama3"
+    assert response.json()["model_id"] == settings.OLLAMA_MODEL

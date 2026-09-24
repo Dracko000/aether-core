@@ -42,6 +42,39 @@ async def test_orchestration_flow():
     await manager.stop()
 
 @pytest.mark.asyncio
+async def test_drop_wake_event_for_unknown_agent():
+    """Wake events for agents without an identity are dropped, not retried forever."""
+    from aether.storage.database import init_db
+    from aether.storage.database import AsyncSessionLocal
+    from aether.storage.repositories_events import AgentEventRepository
+
+    await init_db()
+
+    runtime = AgentRuntime()
+    manager = OrchestrationManager(runtime)
+
+    async with AsyncSessionLocal() as session:
+        repo = AgentEventRepository(session)
+        event_id = "evt_ghost_agent"
+        await repo.create_event(
+            event_id=event_id,
+            agent_id="ghost-agent",
+            event_type="AGENT_MESSAGE",
+            payload={"sender_id": "tester", "content": "hi"},
+            source="test",
+            scheduled_at=0,
+        )
+
+    await manager.process_wake_events()
+
+    async with AsyncSessionLocal() as session:
+        repo = AgentEventRepository(session)
+        pending = await repo.get_pending_events(1e18)
+        assert event_id not in {e.event_id for e in pending}
+        assert not runtime.is_agent_awake("ghost-agent")
+
+
+@pytest.mark.asyncio
 async def test_scheduler_tick():
     from aether.orchestration.scheduler import Scheduler
     scheduler = Scheduler()

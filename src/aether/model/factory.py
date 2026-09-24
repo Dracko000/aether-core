@@ -11,11 +11,16 @@ handler, or an async test) — never at module import time.
 
 from typing import Any, Dict, Optional
 
+import os
+
 from aether.config import settings
 from aether.model.adapter import ModelAdapter
+from aether.model.anthropic_adapter import AnthropicAdapter
 from aether.model.capabilities import CapabilityMatrix, ModelCapabilities
 from aether.model.manager import ModelManager
 from aether.model.ollama import OllamaAdapter
+from aether.model.openai_compat import OpenAICompatAdapter
+from aether.model.providers import PROVIDERS, get_provider
 
 # Default registry of Ollama models with conservative capability estimates.
 #   reasoning_level: 1 = basic, 2 = advanced, 3 = expert
@@ -23,6 +28,16 @@ from aether.model.ollama import OllamaAdapter
 # RAM footprint; the 70B tier is only meaningful on hosts that can run it.
 DEFAULT_MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
     "llama3": {
+        "max_context": 8192,
+        "reasoning_level": 1,
+        "latency_tier": "low",
+    },
+    "llama3.2:1b": {
+        "max_context": 8192,
+        "reasoning_level": 1,
+        "latency_tier": "low",
+    },
+    "qwen2.5:0.5b": {
         "max_context": 8192,
         "reasoning_level": 1,
         "latency_tier": "low",
@@ -71,11 +86,55 @@ def create_default_capability_matrix() -> CapabilityMatrix:
     return register_default_models(CapabilityMatrix())
 
 
+def effective_model_name() -> str:
+    """Resolve the concrete model id for the configured provider."""
+    provider = get_provider(settings.MODEL_PROVIDER)
+    explicit = settings.MODEL_NAME.strip()
+    if explicit:
+        return explicit
+    if provider is not None and provider.api_key_env == "":
+        # Local providers default to OLLAMA_MODEL when unset.
+        return settings.OLLAMA_MODEL.strip() or provider.default_model
+    if provider is not None:
+        return provider.default_model or settings.OLLAMA_MODEL.strip()
+    return settings.OLLAMA_MODEL.strip()
+
+
 def build_adapter() -> ModelAdapter:
-    """Build the production adapter from configuration (Ollama default)."""
-    return OllamaAdapter(
-        base_url=settings.OLLAMA_BASE_URL,
-        model_name=settings.OLLAMA_MODEL,
+    """Build the production adapter from configuration.
+
+    Provider is selected via ``settings.MODEL_PROVIDER`` (default ``ollama``).
+    Remote providers read their key from the profile's env var (or the
+    generic ``PROVIDER_API_KEY`` override).
+    """
+    provider_id = (settings.MODEL_PROVIDER or "ollama").lower().strip()
+    provider = get_provider(provider_id)
+    if provider is None:
+        raise ValueError(
+            f"Unknown model provider {provider_id!r}. "
+            f"Available: {', '.join(sorted(PROVIDERS))}"
+        )
+    model_name = effective_model_name()
+
+    if provider.kind == "ollama":
+        return OllamaAdapter(
+            base_url=settings.OLLAMA_BASE_URL,
+            model_name=model_name,
+        )
+
+    api_key = os.environ.get(provider.api_key_env, "") or settings.PROVIDER_API_KEY
+
+    if provider.kind == "anthropic":
+        return AnthropicAdapter(
+            base_url=provider.base_url,
+            api_key=api_key,
+            model_name=model_name,
+        )
+
+    return OpenAICompatAdapter(
+        base_url=provider.base_url,
+        api_key=api_key,
+        model_name=model_name,
     )
 
 
