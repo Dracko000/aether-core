@@ -61,6 +61,17 @@ Chat dengan agent Aether langsung dari Telegram — semua pesan diteruskan ke sa
 
 Auto-setup memvalidasi token via `getMe`, menulis `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`), lalu menyalakan bot sebagai background task server. `/setup/status` menampilkan status kapan saja.
 
+### 🚀 Deploy sebagai service (VPS/server, agar selalu hidup)
+
+```bash
+# systemd service ada di /etc/systemd/system/aether.service
+systemctl enable --now aether.service   # start + auto-start saat reboot
+systemctl status aether.service         # cek status
+journalctl -u aether.service -f         # ikuti log
+```
+
+Service menjalankan `uvicorn aether.api.app:app --host 0.0.0.0 --port 8456` dari `/root/aether` (membaca `.env` bila ada) dengan `Restart=always`.
+
 ## 📈 Evolution Roadmap
 - [x] v0.1 - Base Agent Runtime
 - [x] v0.3 - Autonomous Goal Decomposer
