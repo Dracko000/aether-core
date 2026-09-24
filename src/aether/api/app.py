@@ -24,6 +24,9 @@ orch_manager = OrchestrationManager(runtime)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await orch_manager.start()
+    # Ensure the schema exists (idempotent: create_all uses checkfirst).
+    from aether.storage.database import init_db
+    await init_db()
     # Model backend (Ollama) worker is built here, inside the running loop.
     app.state.model_manager = build_model_manager()
     logger.info("Aether Core API started")
@@ -53,6 +56,7 @@ app.include_router(models.router, prefix="/models")
 # by contrast, spawns an asyncio worker task on construction, so it is built
 # inside the lifespan handler where a running event loop is guaranteed.
 capability_matrix = create_default_capability_matrix()
+
 # Schemas
 class MessageRequest(BaseModel):
     sender_id: str
