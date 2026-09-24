@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3"
 
+    # Telegram bot bridge (optional; wired via the /setup page)
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_AGENT_ID: str = "aria"
+    TELEGRAM_ENABLED: bool = False
+
     model_config = SettingsConfigDict(env_file=".env")
 
 settings = Settings()

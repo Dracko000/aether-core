@@ -44,6 +44,18 @@ pip install -r requirements.txt
 python -m aether.main
 ```
 
+### 🤖 Telegram Bridge (Auto-Setup)
+Chat dengan agent Aether langsung dari Telegram — semua pesan diteruskan ke satu agent tetap dan dijawab lewat model lokal (Ollama).
+
+1. Start API server:
+   ```bash
+   python -m uvicorn aether.api.app:app --host 0.0.0.0 --port 8000
+   ```
+2. Buka **http://localhost:8000/setup** di browser.
+3. Dapatkan token dari **@BotFather** di Telegram, isi form (agent id, opsional model), klik **Save & Start Bot**.
+
+Auto-setup memvalidasi token via `getMe`, menulis `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_AGENT_ID`, `TELEGRAM_ENABLED=true`), lalu menyalakan bot sebagai background task server. `/setup/status` menampilkan status kapan saja.
+
 ## 📈 Evolution Roadmap
 - [x] v0.1 - Base Agent Runtime
 - [x] v0.3 - Autonomous Goal Decomposer

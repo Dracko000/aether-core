@@ -12,7 +12,8 @@ from aether.storage.database import AsyncSessionLocal
 from aether.storage.repositories import AgentRepository, IdentityRepository
 from aether.storage.repositories_goals import GoalRepository
 from aether.agent.lifecycle import AgentState
-from aether.api.routes import health, agents, models
+from aether.api.routes import health, agents, models, setup
+from aether.config import settings
 from aether.model.factory import create_default_capability_matrix, build_model_manager
 
 logging.basicConfig(level=logging.INFO)
@@ -28,10 +29,29 @@ async def lifespan(_app: FastAPI):
     from aether.storage.database import init_db
     await init_db()
     # Model backend (Ollama) worker is built here, inside the running loop.
-    app.state.model_manager = build_model_manager()
+    _app.state.model_manager = build_model_manager()
+    _app.state.telegram_bot = None
+
+    # Telegram bridge starts as a background task when configured via /setup.
+    if settings.TELEGRAM_ENABLED and settings.TELEGRAM_BOT_TOKEN:
+        try:
+            from aether.api.routes.setup import start_bot_in_app
+
+            await start_bot_in_app(
+                _app,
+                settings.TELEGRAM_BOT_TOKEN,
+                settings.TELEGRAM_AGENT_ID,
+                _app.state.model_manager,
+            )
+        except Exception:
+            logger.exception("Telegram bot failed to start; check token on /setup")
+
     logger.info("Aether Core API started")
     yield
-    model_manager = getattr(app.state, "model_manager", None)
+    bot = getattr(_app.state, "telegram_bot", None)
+    if bot is not None:
+        await bot.stop()
+    model_manager = getattr(_app.state, "model_manager", None)
     if model_manager is not None:
         await model_manager.shutdown()
     await orch_manager.stop()
@@ -50,6 +70,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(agents.router, prefix="/agents")
 app.include_router(models.router, prefix="/models")
+app.include_router(setup.router)
 
 # Global State (single instance; lifecycle handled by lifespan above)
 # Capability matrix is plain data (safe at import time). The ModelManager,
@@ -119,19 +140,9 @@ async def send_message(agent_id: str, req: MessageRequest):
         answer = None
         model_manager = getattr(app.state, "model_manager", None)
         if model_manager is not None:
-            from aether.memory.vector_store import LocalVectorStore
-            from aether.memory.manager import MemoryManager
-            from aether.cognitive.engine import CognitiveEngine
+            from aether.cognitive.service import run_cognitive_query
 
-            async with AsyncSessionLocal() as session:
-                vector_store = LocalVectorStore()
-                memory_manager = MemoryManager(
-                    session=session,
-                    vector_store=vector_store,
-                    model_manager=model_manager,
-                )
-                engine = CognitiveEngine(model_manager, memory_manager)
-                answer = await engine.execute(agent_id=agent_id, query=req.content)
+            answer = await run_cognitive_query(agent_id, req.content, model_manager)
 
         return {"status": "sent", "receiver_id": agent_id, "response": answer}
     except Exception as e:
