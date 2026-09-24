@@ -108,8 +108,30 @@ async def get_agent_state(agent_id: str):
 async def send_message(agent_id: str, req: MessageRequest):
     try:
         await orch_manager.send_agent_message(req.sender_id, agent_id, req.content)
-        return {"status": "sent", "receiver_id": agent_id}
+
+        # Run the agent through the cognitive engine when a model backend is
+        # available (built at startup). Without one (e.g. TestClient without
+        # lifespan) the message is still persisted and delivered async.
+        answer = None
+        model_manager = getattr(app.state, "model_manager", None)
+        if model_manager is not None:
+            from aether.memory.vector_store import LocalVectorStore
+            from aether.memory.manager import MemoryManager
+            from aether.cognitive.engine import CognitiveEngine
+
+            async with AsyncSessionLocal() as session:
+                vector_store = LocalVectorStore()
+                memory_manager = MemoryManager(
+                    session=session,
+                    vector_store=vector_store,
+                    model_manager=model_manager,
+                )
+                engine = CognitiveEngine(model_manager, memory_manager)
+                answer = await engine.execute(agent_id=agent_id, query=req.content)
+
+        return {"status": "sent", "receiver_id": agent_id, "response": answer}
     except Exception as e:
+        logger.exception(f"Message handling failed for {agent_id}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/agent/{agent_id}/goals")
