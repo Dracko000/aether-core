@@ -138,123 +138,196 @@ def _status(app) -> dict:
 
 
 _PAGE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en" class="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aether · Core Console</title>
 <style>
- :root{--bg:#0b0f1a;--panel:#10162a;--panel2:#0d1322;--line:#1e2740;--txt:#e6ebf5;--mut:#8b96b5;
-       --acc:#3b82f6;--acc2:#22d3ee;--ok:#34d399;--err:#f87171;--warn:#fbbf24;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+ :root{
+  /* 9Router palette (from decolua/9router src/app/globals.css) */
+  --color-bg:#FDFAF6;--color-bg-alt:#F7F3EE;--color-surface:#ffffff;
+  --color-surface-2:#f4f4f5;--color-surface-3:#e7e7e9;
+  --color-sidebar:rgba(244,241,236,.85);
+  --color-border:#e5e7eb;--color-border-subtle:#f1f1f3;
+  --color-text-main:#0a0a0a;--color-text-muted:#6B7280;--color-text-subtle:#9CA3AF;
+  --color-brand-500:#E56A4A;--color-brand-600:#cc5236;--color-brand-700:#a64027;
+  --color-success:#10B981;--color-danger:#cf222e;--color-warning:#F59E0B;--color-info:#3B82F6;
+  --radius-lg:14px;--radius:10px;
+  --shadow-soft:0 1px 2px 0 rgba(0,0,0,.04);
+  --shadow-elev:inset 0 1px 0 0 rgba(255,255,255,.8),0 1px 2px rgba(15,23,42,.04),0 12px 36px -8px rgba(15,23,42,.10);
+  --shadow-warm:0 2px 12px -2px rgba(229,106,74,.18);
+ }
+ .dark{
+  --color-bg:#1a1a1a;--color-bg-alt:#1F1F1E;--color-surface:#262626;
+  --color-surface-2:#303030;--color-surface-3:#3a3a3a;
+  --color-sidebar:rgba(30,30,30,.85);
+  --color-border:#333333;--color-border-subtle:#2a2a2a;
+  --color-text-main:#ededed;--color-text-muted:#9ca3af;--color-text-subtle:#6b7280;
+  --color-success:#22c55e;--color-danger:#ef4444;--color-warning:#fbbf24;--color-info:#60a5fa;
+  --shadow-soft:0 1px 2px 0 rgba(0,0,0,.3);
+  --shadow-elev:inset 0 1px 0 0 rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.4),0 16px 48px -8px rgba(0,0,0,.55);
+  --shadow-warm:0 2px 12px -2px rgba(229,106,74,.25);
+ }
  *{box-sizing:border-box;margin:0;padding:0}
- body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+ html{color-scheme:light}.dark{color-scheme:dark}
+ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',system-ui,sans-serif;
+  background:var(--color-bg);color:var(--color-text-main);-webkit-font-smoothing:antialiased;min-height:100vh}
+ ::selection{background:rgba(229,106,74,.25);color:var(--color-brand-500)}
+ button{-webkit-user-select:none;user-select:none;cursor:pointer}
  .app{display:flex;min-height:100vh}
- /* ---------- sidebar ---------- */
- .sidebar{width:232px;flex:0 0 232px;background:linear-gradient(180deg,#0d1322,#0a0e1a);border-right:1px solid var(--line);
-   display:flex;flex-direction:column;padding:18px 14px;position:sticky;top:0;height:100vh}
- .brand{display:flex;gap:10px;align-items:center;padding:2px 6px 18px;border-bottom:1px solid var(--line);margin-bottom:14px}
- .logo{font-size:22px;filter:drop-shadow(0 0 8px rgba(59,130,246,.7))}
- .brand b{font-size:15px;letter-spacing:.4px}
- .brand small{display:block;color:var(--mut);font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase}
- nav{display:flex;flex-direction:column;gap:4px;flex:1}
- .nav-item{display:flex;align-items:center;gap:10px;background:none;border:1px solid transparent;color:var(--mut);
-   padding:10px 12px;border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:600;text-align:left;transition:.15s}
- .nav-item svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
- .nav-item:hover{color:var(--txt);background:#141b30}
- .nav-item.active{color:#fff;background:rgba(59,130,246,.14);border-color:rgba(59,130,246,.35)}
- .side-foot{padding:12px 8px 0;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
- /* ---------- main ---------- */
- .main{flex:1;display:flex;flex-direction:column;min-width:0}
- .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 28px;
-   border-bottom:1px solid var(--line);background:rgba(16,22,42,.6);backdrop-filter:blur(6px);position:sticky;top:0;z-index:5}
- .topbar h1{font-size:19px;font-weight:700}
- .topbar p{color:var(--mut);font-size:12.5px;margin-top:2px}
- .actions{display:flex;gap:10px;align-items:center}
- .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.3px}
- .pill .dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
- .pill.on{color:var(--ok);background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35)}
- .pill.off{color:var(--err);background:rgba(248,113,113,.10);border:1px solid rgba(248,113,113,.3)}
- .pill.warn{color:var(--warn);background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.3)}
- .btn{border:1px solid var(--line);background:#161d30;color:var(--txt);padding:8px 14px;border-radius:9px;
-   font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
- .btn:hover{background:#1b2440;border-color:#2c3a5e}
- .btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
- .btn.primary:hover{background:#2f6fe0}
- .btn.danger{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.4);color:var(--err)}
- .btn.ghost{background:none}
- .content{padding:26px 28px 40px;max-width:1060px;width:100%}
- .view{display:none;animation:fade .25s ease}
+ /* ---------------- sidebar (9router shell) ---------------- */
+ .sidebar{width:288px;flex:0 0 288px;border-right:1px solid var(--color-border-subtle);
+  background:var(--color-sidebar);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+ .traffic-lights{display:flex;gap:8px;padding:20px 24px 8px}
+ .traffic-light{width:12px;height:12px;border-radius:50%}
+ .tl-red{background:#FF5F56}.tl-yellow{background:#FFBD2E}.tl-green{background:#27C93F}
+ .brand{display:flex;flex-direction:column;gap:12px;padding:16px 24px 20px}
+ .brand-main{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit}
+ .brand-logo{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;
+  background:linear-gradient(135deg,var(--color-brand-500),var(--color-brand-700));box-shadow:var(--shadow-warm);flex:none}
+ .brand-logo svg{width:20px;height:20px;stroke:#fff}
+ .brand-name h1{font-size:17px;font-weight:600;letter-spacing:-.02em}
+ .brand-name span{font-size:12px;color:var(--color-text-muted)}
+ nav{flex:1;overflow-y:auto;padding:8px 16px;scrollbar-width:thin}
+ .nav-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--color-text-muted);opacity:.6;padding:14px 12px 6px}
+ .nav-item{display:flex;align-items:center;gap:12px;width:100%;padding:7px 12px;border-radius:8px;
+  border:0;background:none;color:var(--color-text-muted);font-size:13px;font-weight:500;
+  text-align:left;transition:all .15s}
+ .nav-item svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+ .nav-item:hover{background:var(--color-surface-2);color:var(--color-text-main)}
+ .nav-item:hover svg{color:var(--color-brand-500)}
+ .nav-item.active{background:rgba(229,106,74,.10);color:var(--color-brand-500)}
+ .nav-item.active svg{stroke-width:2.4}
+ .side-foot{padding:16px 24px;border-top:1px solid var(--color-border-subtle);font-size:11px;color:var(--color-text-subtle)}
+ /* ---------------- header (9router shell) ---------------- */
+ .main{flex:1;min-width:0;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,var(--color-bg-alt) 0%,var(--color-bg) 100%)}
+ .header{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 16px 10px 32px;border-bottom:1px solid var(--color-border-subtle);
+  background:var(--color-surface);opacity:.97;backdrop-filter:blur(20px);position:sticky;top:0;z-index:20}
+ .page-title{display:flex;align-items:center;gap:8px}
+ .page-title svg{width:22px;height:22px;stroke:var(--color-brand-500);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+ .page-title h1{font-size:19px;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+ .page-title p{font-size:13px;color:var(--color-text-muted)}
+ .header-right{display:flex;align-items:center;gap:8px;flex:none}
+ .icon-btn{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;
+  border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text-muted);transition:.15s}
+ .icon-btn:hover{color:var(--color-brand-500);border-color:var(--color-brand-500)}
+ .icon-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+ .status-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;
+  font-size:12px;font-weight:600;border:1px solid var(--color-border);background:var(--color-surface);white-space:nowrap}
+ .status-chip .dot{width:8px;height:8px;border-radius:50%}
+ .status-chip.on{color:var(--color-success);border-color:color-mix(in srgb,var(--color-success) 40%,transparent);background:color-mix(in srgb,var(--color-success) 10%,transparent)}
+ .status-chip.on .dot{background:var(--color-success);box-shadow:0 0 8px var(--color-success)}
+ .status-chip.off{color:var(--color-danger);border-color:color-mix(in srgb,var(--color-danger) 40%,transparent);background:color-mix(in srgb,var(--color-danger) 10%,transparent)}
+ .status-chip.off .dot{background:var(--color-danger);box-shadow:0 0 8px var(--color-danger)}
+ /* ---------------- content ---------------- */
+ .content{padding:24px 32px 48px;max-width:1000px;width:100%}
+ .view{display:none;animation:fadeIn .2s ease-out forwards}
  .view.active{display:block}
- @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
- /* ---------- cards ---------- */
- .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
- .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;position:relative;overflow:hidden}
- .card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--acc),transparent);opacity:.65}
- .card h3{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--mut);font-weight:700;display:flex;align-items:center;gap:8px}
- .card .big{font-size:22px;font-weight:700;margin-top:12px;font-family:var(--mono);letter-spacing:.3px}
- .card .sub{color:var(--mut);font-size:12px;margin-top:6px;word-break:break-all}
- .card .row{display:flex;justify-content:space-between;font-size:12.5px;margin-top:10px;color:var(--mut)}
- .card .row b{color:var(--txt);font-family:var(--mono);font-weight:600}
- .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700}
- .badge.ok{color:var(--ok);background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3)}
- .badge.bad{color:var(--err);background:rgba(248,113,113,.10);border:1px solid rgba(248,113,113,.3)}
- .badge.mut{color:var(--mut);background:#141b30;border:1px solid var(--line)}
- .banner{display:flex;gap:12px;align-items:center;background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.3);
-   border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:13.5px}
- .banner.warn{background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.3)}
- .banner .ico{font-size:18px}
- /* ---------- setup form ---------- */
- form.card{max-width:560px;display:block}
- label{display:block;font-size:12.5px;font-weight:600;color:var(--mut);margin:14px 0 5px;letter-spacing:.2px}
- input{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);
-   color:var(--txt);font-size:13.5px;font-family:var(--mono);outline:none;transition:.15s}
- input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(59,130,246,.18)}
- input::placeholder{color:#4a5575}
- .hint{font-size:11.5px;color:var(--mut);margin-top:4px}
- pre{background:#080c16;border:1px solid var(--line);border-radius:12px;padding:14px;overflow:auto;
-   font-size:12px;font-family:var(--mono);color:#9fb4e8;margin-top:16px;white-space:pre-wrap}
- pre.ok{color:var(--ok)} pre.err{color:var(--err)}
- .btnrow{display:flex;gap:10px;margin-top:18px}
- .steps{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:18px;font-size:12.5px;color:var(--mut)}
- .steps span b{color:var(--txt)}
+ @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+ .banner{display:flex;gap:12px;align-items:center;padding:14px 18px;border-radius:var(--radius-lg);
+  background:var(--color-surface);border:1px solid var(--color-border);box-shadow:var(--shadow-soft);margin-bottom:20px;font-size:13.5px}
+ .banner .ico{font-size:17px;flex:none}
+ .banner b{color:var(--color-text-main)}
+ .banner.warn{border-color:color-mix(in srgb,var(--color-warning) 45%,transparent);background:color-mix(in srgb,var(--color-warning) 7%,var(--color-surface))}
+ .banner.ok{border-color:color-mix(in srgb,var(--color-success) 45%,transparent);background:color-mix(in srgb,var(--color-success) 7%,var(--color-surface))}
+ .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+ .card{background:var(--color-surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-elev);
+  border:1px solid var(--color-border-subtle);padding:20px}
+ .card h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-muted)}
+ .card .big{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:21px;font-weight:700;margin-top:12px;letter-spacing:-.01em}
+ .card .sub{font-size:12px;color:var(--color-text-muted);margin-top:6px;word-break:break-all}
+ .card .row{display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-top:12px;color:var(--color-text-muted)}
+ .card .row b{color:var(--color-text-main);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;word-break:break-all;text-align:right}
+ .badge{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600}
+ .badge.ok{color:var(--color-success);border:1px solid color-mix(in srgb,var(--color-success) 35%,transparent);background:color-mix(in srgb,var(--color-success) 10%,transparent)}
+ .badge.bad{color:var(--color-danger);border:1px solid color-mix(in srgb,var(--color-danger) 35%,transparent);background:color-mix(in srgb,var(--color-danger) 10%,transparent)}
+ .badge.mut{color:var(--color-text-muted);border:1px solid var(--color-border);background:var(--color-surface-2)}
+ .badge .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+ /* ---------------- setup form ---------------- */
+ .steps{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;font-size:12.5px;color:var(--color-text-muted)}
  .step{display:flex;align-items:center;gap:7px}
- .step i{width:20px;height:20px;border-radius:50%;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);
-   color:var(--acc2);font-style:normal;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center}
- @media (max-width:780px){
+ .step i{width:20px;height:20px;border-radius:50%;background:rgba(229,106,74,.14);border:1px solid rgba(229,106,74,.4);
+  color:var(--color-brand-500);font-style:normal;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center}
+ .step b{color:var(--color-text-main)}
+ form.card{max-width:560px;display:block}
+ label{display:block;font-size:12.5px;font-weight:600;color:var(--color-text-muted);margin:14px 0 5px}
+ label .hint{display:block;font-weight:400;font-size:11.5px;color:var(--color-text-subtle);margin-top:2px}
+ input{width:100%;padding:9px 12px;border-radius:var(--radius);border:1px solid var(--color-border);
+  background:var(--color-bg);color:var(--color-text-main);font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;outline:none;transition:.15s}
+ input:focus{border-color:var(--color-brand-500);box-shadow:0 0 0 3px rgba(229,106,74,.15)}
+ input::placeholder{color:var(--color-text-subtle)}
+ .btnrow{display:flex;gap:10px;margin-top:18px}
+ .btn{border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text-main);
+  padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;transition:.15s}
+ .btn:hover{border-color:var(--color-brand-500);color:var(--color-brand-500)}
+ .btn.primary{background:linear-gradient(135deg,var(--color-brand-500),var(--color-brand-600));border-color:transparent;color:#fff}
+ .btn.primary:hover{filter:brightness(1.06);color:#fff}
+ .btn.danger{color:var(--color-danger);border-color:color-mix(in srgb,var(--color-danger) 40%,transparent);background:color-mix(in srgb,var(--color-danger) 8%,transparent)}
+ .btn.danger:hover{color:var(--color-danger);filter:brightness(1.05)}
+ pre{background:var(--color-bg-alt);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+  padding:14px;overflow:auto;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--color-text-muted);margin-top:20px}
+ pre.ok{color:var(--color-success)} pre.err{color:var(--color-danger)}
+ @media (max-width:820px){
   .app{flex-direction:column}
-  .sidebar{width:100%;height:auto;flex-direction:row;align-items:center;padding:12px 16px;position:static;gap:14px}
-  .brand{border:0;margin:0;padding:0}
-  nav{flex-direction:row;flex:1}
-  .nav-item{padding:8px 10px;font-size:12px}
-  .side-foot{border:0;padding:0}
-  .content{padding:18px 16px 32px}
-  .topbar{padding:14px 16px}
+  .sidebar{width:100%;flex:none;height:auto;position:static;flex-direction:row;align-items:center;gap:12px;padding:10px 16px}
+  .traffic-lights{display:none}
+  .brand{padding:0}.brand-name span{display:none}
+  nav{display:flex;gap:6px;padding:0;overflow:visible}
+  .nav-label{display:none}
+  .side-foot{display:none}
+  .content{padding:18px 16px 40px}
+  .header{padding:10px 16px}
  }
 </style></head><body>
 <div class="app">
+ <!-- ======================= SIDEBAR (9router shell) ======================= -->
  <aside class="sidebar">
-  <div class="brand"><span class="logo">⚡</span><div><b>Aether</b><small>Core Console</small></div></div>
+  <div class="traffic-lights">
+   <span class="traffic-light tl-red"></span><span class="traffic-light tl-yellow"></span><span class="traffic-light tl-green"></span>
+  </div>
+  <div class="brand">
+   <div class="brand-main">
+    <div class="brand-logo"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg></div>
+    <div class="brand-name"><h1>Aether</h1><span>v0.1.0</span></div>
+   </div>
+  </div>
   <nav>
+   <p class="nav-label">Main</p>
    <button class="nav-item active" data-view="overview">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
     Overview</button>
    <button class="nav-item" data-view="setup">
     <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
     Setup</button>
+   <p class="nav-label">System</p>
    <button class="nav-item" data-view="about">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
     About</button>
   </nav>
-  <div class="side-foot">
-   <span id="side-status" class="pill off"><span class="dot"></span>Offline</span>
-   <small style="color:var(--mut);font-family:var(--mono)">v0.1.0</small>
-  </div>
+  <div class="side-foot">Aether Core · local-first agent · public console</div>
  </aside>
 
+ <!-- ======================= MAIN (9router shell) ======================= -->
  <main class="main">
-  <header class="topbar">
-   <div><h1 id="page-title">Overview</h1><p id="page-sub">Telegram bridge · Ollama · one-time setup</p></div>
-   <div class="actions">
-    <span id="top-status" class="pill off"><span class="dot"></span>Bot offline</span>
-    <button class="btn ghost" onclick="refresh()">↻ Refresh</button>
+  <header class="header">
+   <div class="page-title">
+    <span id="title-icon">
+     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+    </span>
+    <div><h1 id="page-title">Overview</h1><p id="page-sub">Telegram bridge · Ollama · one-time setup</p></div>
+   </div>
+   <div class="header-right">
+    <span id="top-status" class="status-chip off"><span class="dot"></span>Bot offline</span>
+    <button class="icon-btn" onclick="refresh()" title="Refresh">
+     <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+    <button class="icon-btn" id="theme-btn" title="Toggle theme">
+     <svg id="theme-ico" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+    </button>
    </div>
   </header>
 
@@ -263,11 +336,11 @@ _PAGE = """<!doctype html>
    <section class="view active" id="view-overview">
     <div class="banner warn" id="setup-banner" style="display:none">
      <span class="ico">⚙️</span>
-     <div><b>First-time setup required.</b> Add your @BotFather token once — after that this page becomes a live monitor and you never need to touch it again.</div>
+     <div><b>First-time setup required.</b> Add your @BotFather token once — after that this console becomes a live monitor and you never touch it again.</div>
     </div>
-    <div class="banner" id="live-banner" style="display:none">
+    <div class="banner ok" id="live-banner" style="display:none">
      <span class="ico">✅</span>
-     <div><b>Bridge is active.</b> Messages sent to your bot are routed to the agent automatically. No further setup needed — this page now just monitors status.</div>
+     <div><b>Bridge is active.</b> Messages sent to your bot are routed to the agent automatically. No further setup needed — this console now just monitors status.</div>
     </div>
     <div class="grid">
      <div class="card">
@@ -278,18 +351,18 @@ _PAGE = """<!doctype html>
      <div class="card">
       <h3>Model</h3>
       <div class="big" id="val-model">—</div>
-      <div class="sub">backend <b style="color:var(--txt)">Ollama</b> · local, no API key</div>
+      <div class="sub">backend <b style="color:var(--color-text-main)">Ollama</b> · local, no API key</div>
       <div class="row"><span>Base URL</span><b id="val-ollama">—</b></div>
      </div>
      <div class="card">
       <h3>Bot Token</h3>
       <div class="big" id="val-token">—</div>
-      <div class="sub" id="val-token-masked" style="font-family:var(--mono)">—</div>
+      <div class="sub" id="val-token-masked">—</div>
      </div>
      <div class="card">
       <h3>Activation Notice</h3>
       <div class="big" id="val-notify">—</div>
-      <div class="sub">notifies owner chat when agent goes live</div>
+      <div class="sub">notifies the owner chat when the agent goes live</div>
      </div>
     </div>
    </section>
@@ -303,13 +376,13 @@ _PAGE = """<!doctype html>
     </div>
     <form class="card" id="setup">
      <h3>Create or update the bridge</h3>
-     <label>Telegram Bot Token</label>
+     <label>Telegram Bot Token<span class="hint">from @BotFather</span></label>
      <input name="telegram_token" id="inp-token" placeholder="123456:ABC-DEF…" autocomplete="off" required>
-     <label>Agent ID <span class="hint">all chats are routed to this agent</span></label>
+     <label>Agent ID<span class="hint">all chats are routed to this agent</span></label>
      <input name="agent_id" id="inp-agent" placeholder="aria" required>
-     <label>Model <span class="hint">optional — leave empty to use OLLAMA_MODEL</span></label>
+     <label>Model<span class="hint">optional — leave empty to use OLLAMA_MODEL</span></label>
      <input name="ollama_model" id="inp-model" placeholder="qwen2.5:0.5b">
-     <label>Telegram user ID to notify when active <span class="hint">optional — get yours from @userinfobot</span></label>
+     <label>Telegram user ID to notify when active<span class="hint">optional — get yours from @userinfobot</span></label>
      <input name="notify_chat_id" id="inp-notify" placeholder="123456789" autocomplete="off">
      <div class="btnrow">
       <button type="submit" class="btn primary">💾 Save &amp; Start Bot</button>
@@ -324,11 +397,11 @@ _PAGE = """<!doctype html>
     <div class="grid">
      <div class="card" style="grid-column:1/-1">
       <h3>Aether Core · v0.1.0</h3>
-      <p style="margin-top:10px;font-size:13.5px;color:var(--mut);line-height:1.6">
+      <p style="margin-top:12px;font-size:13.5px;color:var(--color-text-muted);line-height:1.65">
        Local agent runtime: one fixed agent answers every Telegram message through the
        cognitive engine, backed by a fully local model (Ollama) — no API keys, no cloud.
-       Setup happens once via the <b style="color:var(--txt)">Setup</b> tab; this console then
-       monitors the live bridge. Docs and deploy notes live in the project README.</p>
+       Setup happens once via the <b style="color:var(--color-text-main)">Setup</b> tab; this console
+       (9Router-style shell) then monitors the live bridge. Docs and deploy notes live in the project README.</p>
      </div>
     </div>
    </section>
@@ -338,29 +411,31 @@ _PAGE = """<!doctype html>
 <script>
  const VIEWS=['overview','setup','about'];
  const topStatus=document.getElementById('top-status');
- const sideStatus=document.getElementById('side-status');
+ const titles={overview:['Overview','Telegram bridge · Ollama · one-time setup'],
+   setup:['Setup','Configure once — then it just runs'],
+   about:['About','Aether Core console']};
+ const icons={overview:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+   setup:'<svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
+   about:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>'};
  function go(view){
   VIEWS.forEach(v=>{
-   document.getElementById('view-'+v).classList.toggle('active', v===view);
-   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+   document.getElementById('view-'+v).classList.toggle('active',v===view);
+   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
   });
-  const t={overview:['Overview','Telegram bridge · Ollama · one-time setup'],
-           setup:['Setup','Configure once — then it just runs'],
-           about:['About','']}[view];
-  document.getElementById('page-title').textContent=t[0];
-  document.getElementById('page-sub').textContent=t[1];
+  document.getElementById('title-icon').innerHTML=icons[view];
+  document.getElementById('page-title').textContent=titles[view][0];
+  document.getElementById('page-sub').textContent=titles[view][1];
  }
  document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>go(b.dataset.view));
 
  async function refresh(){
   let s;
   try{ s=await (await fetch('/setup/status')).json(); }
-  catch(e){ setPill(topStatus,'off','Status offline'); return; }
+  catch(e){ setChip(topStatus,'off','Status offline'); return; }
   const on=s.bot_running;
-  setPill(topStatus, on?'on':'off', on?'● Bot running':'● Bot stopped');
-  setPill(sideStatus, on?'on':'off', on?'Online':'Offline');
+  setChip(topStatus,on?'on':'off',on?'Bot running':'Bot stopped');
   document.getElementById('val-bot').innerHTML=on
-   ?'<span class="badge ok">● Running</span>':'<span class="badge bad">● Stopped</span>';
+   ?'<span class="badge ok"><span class="dot"></span>Running</span>':'<span class="badge bad"><span class="dot"></span>Stopped</span>';
   document.getElementById('val-bot-agent').textContent=s.token_configured
    ?'agent '+s.agent_id+' · token '+s.token_masked:'agent '+s.agent_id+' · no token';
   document.getElementById('val-model').textContent=s.ollama_model||'—';
@@ -372,13 +447,11 @@ _PAGE = """<!doctype html>
    ?'<span class="badge ok">On</span>':'<span class="badge mut">Not set</span>';
   document.getElementById('setup-banner').style.display=(!s.token_configured||!s.bot_running)?'flex':'none';
   document.getElementById('live-banner').style.display=(s.token_configured&&s.bot_running)?'flex':'none';
-  go(VIEWS.find(v=>document.getElementById('view-'+v).classList.contains('active'))||'overview');
-  // prefill editable fields (no token — never leak it back)
   document.getElementById('inp-agent').value=s.agent_id||'';
-  document.getElementById('inp-model').value=s.ollama_model==='llama3'?'':s.ollama_model||'';
+  document.getElementById('inp-model').value=(s.ollama_model&&s.ollama_model!=='llama3')?s.ollama_model:'';
   document.getElementById('inp-notify').value=s.notify_configured?s.notify_chat_id:'';
  }
- function setPill(el,cls,txt){el.className='pill '+cls;el.innerHTML='<span class="dot"></span>'+txt;}
+ function setChip(el,cls,txt){el.className='status-chip '+cls;el.innerHTML='<span class="dot"></span>'+txt;}
 
  async function post(body){
   const r=await fetch('/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -400,10 +473,20 @@ _PAGE = """<!doctype html>
   el.textContent=JSON.stringify(j,null,2);el.className='ok';
   refresh();
  };
+
+ /* theme toggle (9router-style, persisted) */
+ const root=document.documentElement;
+ const themeBtn=document.getElementById('theme-btn');
+ const themeIco=document.getElementById('theme-ico');
+ const SUN='<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>';
+ const MOON='<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>';
+ function applyTheme(dark){root.classList.toggle('dark',dark);themeIco.innerHTML=dark?MOON:SUN;localStorage.setItem('aether-theme',dark?'dark':'light');}
+ themeBtn.onclick=()=>applyTheme(!root.classList.contains('dark'));
+ applyTheme(localStorage.getItem('aether-theme')!=='light');
+
  refresh();
  setInterval(refresh,5000);
-</script></body></html>
-"""
+</script></body></html>"""
 
 
 @router.get("/setup", response_class=HTMLResponse)
