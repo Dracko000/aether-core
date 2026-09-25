@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BoltIcon,
   GearIcon,
@@ -196,21 +196,44 @@ export default function SetupPage() {
     }
   }
 
+  /**
+   * Fetch the live model list for a provider and fold it into the form.
+   * Returns the raw probe response so ⚡ Test can render it; the automatic
+   * probes pass { silent: true } so they never touch the result panel.
+   */
+  async function fetchModels(
+    provider: string,
+    api_key: string,
+    opts: { silent?: boolean } = {},
+  ): Promise<{ ok?: boolean; models?: string[]; error?: string; detail?: string }> {
+    if (!provider) return { ok: false, error: "no provider selected" };
+    const r = await fetch("/api/setup/probe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, api_key }),
+    });
+    const j = await r.json();
+    if (j.ok && Array.isArray(j.models) && j.models.length > 0) {
+      setProbeModels(j.models);
+      // Auto-pick the first model unless the user already picked one that the
+      // provider actually serves (so switching provider replaces a stale name).
+      setForm((f) =>
+        f.model && j.models.includes(f.model) ? f : { ...f, model: j.models[0] },
+      );
+    } else {
+      setProbeModels([]);
+    }
+    if (!opts.silent) {
+      setResult(JSON.stringify(j, null, 2));
+      setResultClass(j.ok ? "ok" : "err");
+    }
+    return j;
+  }
+
   async function onProbe() {
     setBusy(true);
     try {
-      const r = await fetch("/api/setup/probe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: form.provider, api_key: form.api_key }),
-      });
-      const j = await r.json();
-      setResult(JSON.stringify(j, null, 2));
-      setResultClass(j.ok ? "ok" : "err");
-      if (j.ok && Array.isArray(j.models)) {
-        setProbeModels(j.models);
-      }
-      return j;
+      return await fetchModels(form.provider, form.api_key);
     } catch (err) {
       setResult(JSON.stringify({ ok: false, error: "fetch failed", detail: String(err) }, null, 2));
       setResultClass("err");
@@ -219,6 +242,37 @@ export default function SetupPage() {
       setBusy(false);
     }
   }
+
+  // Auto-fetch the live model list when the provider changes, so choosing a
+  // provider immediately populates the model dropdown (no ⚡ Test needed).
+  const autoProbedFor = useRef<string>("");
+  useEffect(() => {
+    const provider = form.provider;
+    if (!provider) return;
+    // Skip the initial empty-provider pass and don't refetch the same provider.
+    if (autoProbedFor.current === provider) return;
+    autoProbedFor.current = provider;
+    fetchModels(provider, form.api_key, { silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.provider]);
+
+  // Re-fetch shortly after the user pastes an API key so the model list fills in.
+  const keyDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastKey = useRef(form.api_key);
+  useEffect(() => {
+    if (form.api_key === lastKey.current) return;
+    lastKey.current = form.api_key;
+    if (keyDebounce.current) clearTimeout(keyDebounce.current);
+    const key = form.api_key.trim();
+    if (!key) return;
+    keyDebounce.current = setTimeout(() => {
+      fetchModels(form.provider, key, { silent: true });
+    }, 600);
+    return () => {
+      if (keyDebounce.current) clearTimeout(keyDebounce.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.api_key]);
 
   const on = status?.bot_running ?? false;
   const tokenOk = status?.token_configured ?? false;
@@ -685,7 +739,7 @@ function SetupView({
         </span>
         <span className="flex items-center gap-2">
           <StepNo n={2} />
-          <span>Pick model &amp; test key</span>
+          <span>Pick model (fetched live)</span>
         </span>
         <span className="flex items-center gap-2">
           <StepNo n={3} />
@@ -764,6 +818,26 @@ function SetupView({
           </p>
         )}
 
+        {needsKey && (
+          <>
+            <label className="mt-3 block text-[12.5px] font-semibold text-muted">
+              Provider API Key
+              <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
+                {activeProvider?.key_configured
+                  ? "a key is already configured — leave blank to keep it"
+                  : "required for this provider — paste it; the model list fills in automatically"}
+              </span>
+            </label>
+            <input
+              value={form.api_key}
+              onChange={set("api_key")}
+              placeholder={`${activeProvider?.key_configured ? "sk-•••• (keep existing)" : "sk-…"}`}
+              autoComplete="off"
+              className={inputCls}
+            />
+          </>
+        )}
+
         <label className="mt-3 block text-[12.5px] font-semibold text-muted">
           Model
           <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
@@ -783,10 +857,10 @@ function SetupView({
             type="button"
             disabled={busy}
             onClick={() => onProbe()}
-            title="Test the connection and fetch the live model list"
+            title="Test the connection and refetch the live model list"
             className="mt-1.5 flex-none rounded-brand border border-line bg-surface px-3 py-2 text-[12.5px] font-semibold text-main transition hover:border-brand hover:text-brand disabled:opacity-60"
           >
-            ⚡ Test
+            ⟳ Retry
           </button>
         </div>
         <datalist id="aether-model-list">
@@ -794,26 +868,6 @@ function SetupView({
             <option key={m} value={m} />
           ))}
         </datalist>
-
-        {needsKey && (
-          <>
-            <label className="mt-3 block text-[12.5px] font-semibold text-muted">
-              Provider API Key
-              <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
-                {activeProvider?.key_configured
-                  ? "a key is already configured — leave blank to keep it"
-                  : "required for this provider — paste it, then hit ⚡ Test"}
-              </span>
-            </label>
-            <input
-              value={form.api_key}
-              onChange={set("api_key")}
-              placeholder={`${activeProvider?.key_configured ? "sk-•••• (keep existing)" : "sk-…"}`}
-              autoComplete="off"
-              className={inputCls}
-            />
-          </>
-        )}
 
         <label className="mt-3 block text-[12.5px] font-semibold text-muted">
           Telegram user ID to notify when active
