@@ -28,6 +28,24 @@ type Status = {
   model_name?: string;
   provider_needs_key?: boolean;
   provider_key_configured?: boolean;
+  allowlist_active?: boolean;
+  allowlist_ids?: number[];
+  detected_owner_id?: number | null;
+  detected_owner_name?: string | null;
+  detected_owner_username?: string | null;
+  detected_owner_allowed?: boolean;
+};
+
+type DiagnoseCheck = {
+  id: string;
+  label: string;
+  ok: boolean;
+  detail: string;
+};
+
+type Diagnose = {
+  ok?: boolean;
+  checks?: DiagnoseCheck[];
 };
 
 type ProviderInfo = {
@@ -62,6 +80,8 @@ export default function SetupPage() {
   const [resultClass, setResultClass] = useState<"idle" | "ok" | "err">("idle");
   const [busy, setBusy] = useState(false);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [diagnose, setDiagnose] = useState<Diagnose | null>(null);
+  const [probeModels, setProbeModels] = useState<string[]>([]);
   const [form, setForm] = useState({
     telegram_token: "",
     agent_id: "",
@@ -83,14 +103,17 @@ export default function SetupPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [sr, pr] = await Promise.all([
+      const [sr, pr, dr] = await Promise.all([
         fetch("/setup/status", { cache: "no-store" }),
         fetch("/setup/providers", { cache: "no-store" }),
+        fetch("/setup/diagnose", { cache: "no-store" }),
       ]);
       const s: Status = await sr.json();
       const p = await pr.json();
+      const d: Diagnose = await dr.json();
       setStatus(s);
       setProviders(Array.isArray(p?.providers) ? p.providers : []);
+      setDiagnose(d);
       prefilled(s);
     } catch {
       setStatus(null);
@@ -148,6 +171,50 @@ export default function SetupPage() {
       setResult(JSON.stringify(j, null, 2));
       setResultClass("ok");
       refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onAllowOwner(userId: number) {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/setup/allow-owner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const j = await r.json();
+      setResult(JSON.stringify(j, null, 2));
+      setResultClass(j.ok ? "ok" : "err");
+      refresh();
+    } catch (err) {
+      setResult(JSON.stringify({ ok: false, error: "fetch failed", detail: String(err) }, null, 2));
+      setResultClass("err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onProbe() {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/setup/probe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: form.provider, api_key: form.api_key }),
+      });
+      const j = await r.json();
+      setResult(JSON.stringify(j, null, 2));
+      setResultClass(j.ok ? "ok" : "err");
+      if (j.ok && Array.isArray(j.models)) {
+        setProbeModels(j.models);
+      }
+      return j;
+    } catch (err) {
+      setResult(JSON.stringify({ ok: false, error: "fetch failed", detail: String(err) }, null, 2));
+      setResultClass("err");
+      return { ok: false, error: "fetch failed" };
     } finally {
       setBusy(false);
     }
@@ -247,7 +314,16 @@ export default function SetupPage() {
         </header>
 
         <div className="w-full max-w-[1000px] px-4 py-6 md:px-8 md:py-8">
-          {view === "overview" && <Overview status={status} on={on} tokenOk={tokenOk} />}
+          {view === "overview" && (
+            <Overview
+              status={status}
+              on={on}
+              tokenOk={tokenOk}
+              diagnose={diagnose}
+              busy={busy}
+              onAllowOwner={onAllowOwner}
+            />
+          )}
           {view === "setup" && (
             <SetupView
               form={form}
@@ -255,9 +331,11 @@ export default function SetupPage() {
               busy={busy}
               onSubmit={onSubmit}
               onStop={onStop}
+              onProbe={onProbe}
               result={result}
               resultClass={resultClass}
               providers={providers}
+              probeModels={probeModels}
             />
           )}
           {view === "about" && <About />}
@@ -293,8 +371,59 @@ function NavButton({
 
 /* ============================ OVERVIEW ============================ */
 
-function Overview({ status, on, tokenOk }: { status: Status | null; on: boolean; tokenOk: boolean }) {
+function CheckRow({ check }: { check: DiagnoseCheck }) {
+  const tone = check.ok ? "ok" : "bad";
+  const glyph = check.ok ? "✓" : "✗";
+  return (
+    <li className="flex items-start gap-2.5 rounded-brand border border-line-subtle bg-bg/60 px-3 py-2 text-[12.5px]">
+      <span
+        className={`mt-[1px] flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full text-[11px] font-bold ${
+          check.ok
+            ? "bg-ok/15 text-ok"
+            : "bg-bad/15 text-bad"
+        }`}
+        title={check.ok ? "ok" : "warning"}
+      >
+        {glyph}
+      </span>
+      <div className="min-w-0">
+        <div className="font-semibold text-main">{check.label}</div>
+        <div className={`truncate font-mono text-[11.5px] ${tone === "ok" ? "text-muted" : "text-bad/90"}`}>
+          {check.detail}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function Overview({
+  status,
+  on,
+  tokenOk,
+  diagnose,
+  busy,
+  onAllowOwner,
+}: {
+  status: Status | null;
+  on: boolean;
+  tokenOk: boolean;
+  diagnose: Diagnose | null;
+  busy: boolean;
+  onAllowOwner: (userId: number) => void;
+}) {
   const needSetup = !tokenOk || !on;
+  const checks = diagnose?.checks ?? [];
+  const failCount = checks.filter((c) => !c.ok).length;
+  const detected = status?.detected_owner_id ? status.detected_owner_id : null;
+  const detectedAllowed = status?.detected_owner_allowed ?? false;
+  const nextSteps = [
+    !tokenOk && "Get a bot token from @BotFather and save it in Setup.",
+    tokenOk && !on && "Press Save & Start Bot once from the Setup tab.",
+    status?.provider_needs_key && !status?.provider_key_configured && "Add your provider API key in Setup.",
+    status?.allowlist_active === false && "Add your Telegram user id (one click below, or /sethome after saving).",
+    status?.notify_configured === false && "Send /sethome from Telegram to receive activation notices.",
+  ].filter(Boolean) as string[];
+
   return (
     <section>
       {needSetup ? (
@@ -393,6 +522,81 @@ function Overview({ status, on, tokenOk }: { status: Status | null; on: boolean;
           </p>
         </div>
       </div>
+
+      {/* ---------- detected owner ---------- */}
+      {detected !== null && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-brand-lg border border-line-subtle bg-surface p-4 shadow-elev">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+              Detected sender
+            </h3>
+            <p className="mt-1 truncate text-[13px] text-main">
+              {status?.detected_owner_name || status?.detected_owner_username || "—"}
+              <span className="ml-2 font-mono text-xs text-muted">id {detected}</span>
+            </p>
+            <p className="mt-0.5 text-[11.5px] text-subtle">
+              first person to message the bot — ready to add to the allowlist
+            </p>
+          </div>
+          {!detectedAllowed ? (
+            <button
+              disabled={busy}
+              onClick={() => onAllowOwner(detected)}
+              className="rounded-brand border border-transparent bg-gradient-to-br from-brand to-brand-hover px-3.5 py-1.5 text-[12.5px] font-semibold text-white transition hover:brightness-105 disabled:opacity-60"
+            >
+              + Allow this user
+            </button>
+          ) : (
+            <StatusBadge tone="ok">allowed ✓</StatusBadge>
+          )}
+        </div>
+      )}
+
+      {/* ---------- diagnose / next steps ---------- */}
+      <div className="mt-4 grid gap-4 md:grid-cols-[300px_1fr]">
+        <div className="rounded-brand-lg border border-line-subtle bg-surface p-4 shadow-elev">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            Next steps
+          </h3>
+          {nextSteps.length === 0 ? (
+            <p className="mt-2.5 text-[12.5px] text-ok">🎉 Everything is in place.</p>
+          ) : (
+            <ol className="mt-2.5 list-decimal space-y-1.5 pl-4 text-[12.5px] leading-snug text-muted">
+              {nextSteps.map((step, i) => (
+                <li key={i}>{step}</li>
+              ))}
+            </ol>
+          )}
+        </div>
+
+        <div className="rounded-brand-lg border border-line-subtle bg-surface p-4 shadow-elev">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+              Diagnose · health walk
+            </h3>
+            {diagnose !== null && (
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                  failCount === 0
+                    ? "border-ok/35 bg-ok/10 text-ok"
+                    : "border-warn/45 bg-warn/10 text-warn"
+                }`}
+              >
+                {failCount === 0 ? "✓ all good" : `⚠ ${failCount} issue(s)`}
+              </span>
+            )}
+          </div>
+          {checks.length === 0 ? (
+            <p className="mt-2.5 text-[12.5px] text-muted">No checks yet — refresh.</p>
+          ) : (
+            <ul className="mt-2.5 space-y-1.5">
+              {checks.map((c) => (
+                <CheckRow key={c.id} check={c} />
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
@@ -422,9 +626,11 @@ function SetupView({
   busy,
   onSubmit,
   onStop,
+  onProbe,
   result,
   resultClass,
   providers,
+  probeModels,
 }: {
   form: {
     telegram_token: string;
@@ -438,9 +644,11 @@ function SetupView({
   busy: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onStop: () => void;
+  onProbe: () => Promise<unknown>;
   result: string;
   resultClass: "idle" | "ok" | "err";
   providers: ProviderInfo[];
+  probeModels: string[];
 }) {
   const set =
     (k: keyof typeof form) =>
@@ -453,22 +661,35 @@ function SetupView({
   const inputCls =
     "mt-1.5 w-full rounded-brand border border-line bg-bg px-3 py-2 font-mono text-[13px] text-main outline-none transition-shadow focus:border-brand focus:ring-[3px] focus:ring-brand/15";
 
+  const modelOptions =
+    probeModels.length > 0
+      ? probeModels
+      : (activeProvider?.default_model ? [activeProvider.default_model] : []);
+
   return (
     <section>
       <div className="mb-4 flex flex-wrap gap-3.5 text-[12.5px] text-muted">
         <span className="flex items-center gap-2">
           <StepNo n={1} />
           <span>
-            <b className="text-main">@BotFather</b> → new bot → copy token
+            <b className="text-main">@BotFather</b> → new bot → copy token{" "}
+            <a
+              className="text-brand underline-offset-2 hover:underline"
+              href="https://t.me/BotFather"
+              target="_blank"
+              rel="noreferrer"
+            >
+              open ↗
+            </a>
           </span>
         </span>
         <span className="flex items-center gap-2">
           <StepNo n={2} />
-          <span>Fill form &amp; Save (once)</span>
+          <span>Pick model &amp; test key</span>
         </span>
         <span className="flex items-center gap-2">
           <StepNo n={3} />
-          <span>Chat with the bot — done</span>
+          <span>Save &amp; chat with the bot</span>
         </span>
       </div>
 
@@ -479,7 +700,9 @@ function SetupView({
 
         <label className="mt-3 block text-[12.5px] font-semibold text-muted">
           Telegram Bot Token
-          <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">from @BotFather</span>
+          <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
+            from @BotFather — /newbot → name → username → copy the token
+          </span>
         </label>
         <input
           value={form.telegram_token}
@@ -545,14 +768,32 @@ function SetupView({
           Model
           <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
             optional — empty = {activeProvider?.default_model || "provider default"}
+            {probeModels.length > 0 ? ` · ${probeModels.length} live model(s) fetched` : ""}
           </span>
         </label>
-        <input
-          value={form.model}
-          onChange={set("model")}
-          placeholder={activeProvider?.default_model || "qwen2.5:0.5b / gpt-4o-mini"}
-          className={inputCls}
-        />
+        <div className="flex gap-2">
+          <input
+            value={form.model}
+            onChange={set("model")}
+            placeholder={activeProvider?.default_model || "qwen2.5:0.5b / gpt-4o-mini"}
+            list="aether-model-list"
+            className={inputCls}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onProbe()}
+            title="Test the connection and fetch the live model list"
+            className="mt-1.5 flex-none rounded-brand border border-line bg-surface px-3 py-2 text-[12.5px] font-semibold text-main transition hover:border-brand hover:text-brand disabled:opacity-60"
+          >
+            ⚡ Test
+          </button>
+        </div>
+        <datalist id="aether-model-list">
+          {modelOptions.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
 
         {needsKey && (
           <>
@@ -561,7 +802,7 @@ function SetupView({
               <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
                 {activeProvider?.key_configured
                   ? "a key is already configured — leave blank to keep it"
-                  : "required for this provider"}
+                  : "required for this provider — paste it, then hit ⚡ Test"}
               </span>
             </label>
             <input
@@ -577,7 +818,7 @@ function SetupView({
         <label className="mt-3 block text-[12.5px] font-semibold text-muted">
           Telegram user ID to notify when active
           <span className="mt-0.5 block text-[11.5px] font-normal text-subtle">
-            optional — get yours from @userinfobot
+            optional — message the bot, then send /sethome to set it automatically
           </span>
         </label>
         <input

@@ -23,6 +23,9 @@ os.environ["DATABASE_URL"] = (
     f"sqlite+aiosqlite:////{os.path.join(TEST_DATA_DIR, 'aether_test.db')}"
 )
 os.environ["AETHER_VECTOR_STORE_PATH"] = VECTOR_STORE_PATH
+os.environ["AETHER_OWNER_CANDIDATES"] = os.path.join(
+    TEST_DATA_DIR, "owner_candidates.json"
+)
 
 # Fresh start: remove any state left behind by a previous invocation
 # including the WAL/shm sidecar files that can survive an interrupted run.

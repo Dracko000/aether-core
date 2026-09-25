@@ -11,6 +11,7 @@ __pycache__/
 *.pkl
 tests/.test_data/
 data/sqlite/*.db
+data/sqlite/owner_candidates.json
 data/vectors/*.pkl
 
 # Build artifacts

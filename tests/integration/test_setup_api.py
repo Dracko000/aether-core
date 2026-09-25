@@ -20,6 +20,8 @@ def _restore_settings():
         settings.TELEGRAM_ENABLED,
         settings.TELEGRAM_CHAT_ID,
         settings.OLLAMA_MODEL,
+        settings.TELEGRAM_ALLOWED_USERS,
+        settings.TELEGRAM_ALLOW_ALL_USERS,
     )
     yield
     (
@@ -28,6 +30,8 @@ def _restore_settings():
         settings.TELEGRAM_ENABLED,
         settings.TELEGRAM_CHAT_ID,
         settings.OLLAMA_MODEL,
+        settings.TELEGRAM_ALLOWED_USERS,
+        settings.TELEGRAM_ALLOW_ALL_USERS,
     ) = saved
 
 
@@ -238,3 +242,87 @@ def test_setup_start_rejected_token(monkeypatch, tmp_path):
     assert not (tmp_path / ".env").exists() or "TELEGRAM_BOT_TOKEN" not in setup_mod.load_env(
         tmp_path / ".env"
     )
+
+
+# ------------------------------------------------------------- diagnose
+def test_setup_diagnose_reports_checks(monkeypatch):
+    """The diagnose endpoint returns doctor-style rows without secrets."""
+    monkeypatch.setattr(
+        setup_mod, "check_telegram_token", AsyncMock(return_value={"ok": True, "username": "my_bot"})
+    )
+    monkeypatch.setattr(
+        setup_mod,
+        "check_ollama",
+        AsyncMock(return_value={"ok": True, "models": ["llama3.2:1b", "qwen2.5:0.5b"]}),
+    )
+    settings.TELEGRAM_BOT_TOKEN = "123:TEST"
+
+    resp = client.get("/setup/diagnose")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "ok" in body
+    checks = body["checks"]
+    ids = [c["id"] for c in checks]
+    assert "telegram" in ids and "bot" in ids and "model" in ids
+    assert "access" in ids and "home" in ids
+    telegram = next(c for c in checks if c["id"] == "telegram")
+    assert telegram["ok"] is True
+    assert "@my_bot" in telegram["detail"]
+    # Never leak secrets.
+    assert "123:TEST" not in resp.text
+
+
+def test_setup_diagnose_flags_missing_token(monkeypatch):
+    settings.TELEGRAM_BOT_TOKEN = ""
+    resp = client.get("/setup/diagnose")
+    assert resp.status_code == 200
+    checks = resp.json()["checks"]
+    telegram = next(c for c in checks if c["id"] == "telegram")
+    assert telegram["ok"] is False
+    assert "not set" in telegram["detail"]
+
+
+# ------------------------------------------------------------- probe
+@pytest.mark.asyncio
+async def test_probe_unknown_provider():
+    resp = client.post("/setup/probe", json={"provider": "nope"})
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is False
+
+
+def test_probe_ollama_ok(monkeypatch):
+    monkeypatch.setattr(
+        setup_mod,
+        "check_ollama",
+        AsyncMock(return_value={"ok": True, "models": ["llama3.2:1b"]}),
+    )
+    resp = client.post("/setup/probe", json={"provider": "ollama"})
+    assert resp.json()["ok"] is True
+    assert resp.json()["models"] == ["llama3.2:1b"]
+
+
+def test_probe_remote_requires_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    resp = client.post("/setup/probe", json={"provider": "openai"})
+    body = resp.json()
+    assert body["ok"] is False
+    assert "API key" in body["error"]
+
+
+# ------------------------------------------------------------- allow owner
+def test_allow_owner_writes_allowlist(monkeypatch, tmp_path):
+    monkeypatch.setenv("AETHER_ENV_FILE", str(tmp_path / ".env"))
+    settings.TELEGRAM_ALLOWED_USERS = ""
+    resp = client.post("/setup/allow_owner", json={"user_id": 42})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["allowed_users"] == [42]
+    assert settings.TELEGRAM_ALLOWED_USERS == "42"
+    env = setup_mod.load_env(tmp_path / ".env")
+    assert env["TELEGRAM_ALLOWED_USERS"] == "42"
+
+
+def test_allow_owner_requires_user_id():
+    resp = client.post("/setup/allow_owner", json={"user_id": 0})
+    assert resp.json()["ok"] is False

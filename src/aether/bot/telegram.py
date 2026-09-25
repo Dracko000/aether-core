@@ -20,9 +20,13 @@ The heavy ``python-telegram-bot`` import is lazy so importing the API app
 does not require the Telegram stack at import time.
 """
 import asyncio
+import json
 import logging
+import os
 import random
 from collections import defaultdict, deque
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from aether.config import settings
@@ -53,6 +57,14 @@ CHUNK_LIMIT = 3500
 HISTORY_TURNS = 8
 TYPING_INTERVAL = 4.0
 PATIENCE_DELAY = 6.0
+
+
+def owner_candidates_file() -> Path:
+    """Where first-seen senders are recorded (the 'detected owner' hint).
+
+    Overridable via ``AETHER_OWNER_CANDIDATES`` so tests use a temp path.
+    """
+    return Path(os.environ.get("AETHER_OWNER_CANDIDATES", "data/sqlite/owner_candidates.json"))
 
 
 class AetherTelegramBot:
@@ -86,6 +98,52 @@ class AetherTelegramBot:
         self._history: Dict[str, deque] = defaultdict(
             lambda: deque(maxlen=HISTORY_TURNS * 2)
         )
+        # user_id -> {id, name, username, first_seen} — first-seen senders
+        # (the "detected owner" hint on the console / setup page).
+        self.owner_candidates: Dict[int, dict] = self._load_candidates()
+
+    # ------------------------------------------------------- owner detection
+
+    def _load_candidates(self) -> Dict[int, dict]:
+        try:
+            path = owner_candidates_file()
+            if not path.exists():
+                return {}
+            raw = json.loads(path.read_text())
+            out: Dict[int, dict] = {}
+            for entry in raw if isinstance(raw, list) else []:
+                uid = entry.get("id")
+                if isinstance(uid, int):
+                    out[uid] = entry
+            return out
+        except Exception:  # pragma: no cover - best-effort hint only
+            return {}
+
+    def _persist_candidates(self) -> None:
+        try:
+            path = owner_candidates_file()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(list(self.owner_candidates.values()), indent=2)
+            )
+        except Exception:  # pragma: no cover - best-effort hint only
+            pass
+
+    def _note_sender(self, update) -> None:
+        """Record a first-seen sender as a potential owner (idempotent)."""
+        user = getattr(update, "effective_user", None) or getattr(
+            getattr(update, "message", None), "from_user", None
+        )
+        uid = getattr(user, "id", None)
+        if not isinstance(uid, int) or uid in self.owner_candidates:
+            return
+        self.owner_candidates[uid] = {
+            "id": uid,
+            "name": getattr(user, "first_name", "") or "",
+            "username": getattr(user, "username", "") or "",
+            "first_seen": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        self._persist_candidates()
 
     @staticmethod
     def _parse_allowed_users(raw: str) -> Optional[Set[int]]:
@@ -120,6 +178,7 @@ class AetherTelegramBot:
         app.add_handler(CommandHandler("model", self._cmd_model))
         app.add_handler(CommandHandler("new", self._cmd_new))
         app.add_handler(CommandHandler("about", self._cmd_about))
+        app.add_handler(CommandHandler("sethome", self._cmd_sethome))
         app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_message)
         )
@@ -292,7 +351,7 @@ class AetherTelegramBot:
             f"👋 Hi! I'm connected to Aether agent <b>'{self.agent_id}'</b>.\n"
             f"Model: <b>{self._provider_label()}</b> · {self._effective_model()}\n\n"
             "Send me any message — I route it through the engine and answer.\n"
-            "Commands: /help · /status · /model · /new · /about",
+            "Commands: /help · /status · /model · /new · /sethome · /about",
             parse_mode="HTML",
         )
 
@@ -305,6 +364,7 @@ class AetherTelegramBot:
             "/status — backend health\n"
             "/model — active provider + model\n"
             "/new — clear this chat's conversation history\n"
+            "/sethome — set this chat as the notification home\n"
             "/about — what this is",
             parse_mode="HTML",
         )
@@ -352,6 +412,19 @@ class AetherTelegramBot:
             parse_mode="HTML",
         )
 
+    async def _cmd_sethome(self, update, context):
+        """Set this chat as the home channel (activation notices land here)."""
+        chat_id = str(update.effective_chat.id)
+        from aether.api.routes.setup import write_env  # lazy: avoid import cycle
+
+        write_env({"TELEGRAM_CHAT_ID": chat_id})
+        settings.TELEGRAM_CHAT_ID = chat_id
+        await update.message.reply_text(
+            f"🏠 Home channel set to <b>{chat_id}</b>.\n"
+            "Activation notices will be delivered to this chat.",
+            parse_mode="HTML",
+        )
+
     # -------------------------------------------------------------- ingress
 
     async def _on_message(self, update, context):
@@ -359,6 +432,7 @@ class AetherTelegramBot:
         text = (message.text or "").strip()
         if not text:
             return
+        self._note_sender(update)
         if not self._is_allowed(update):
             await message.reply_text(
                 "⛔ Sorry, you're not on this bot's allowed-user list."

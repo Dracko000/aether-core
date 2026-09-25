@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from aether.bot.telegram import AetherTelegramBot, MAX_MESSAGE_CHARS
+from aether.config import settings
 
 
 def mk_update(text="hello", user_id=42, chat_id=123):
@@ -128,6 +129,50 @@ def test_parse_allowed_users():
     assert AetherTelegramBot._parse_allowed_users(" 1 , 2 ") == {1, 2}
     assert AetherTelegramBot._parse_allowed_users("") is None
     assert AetherTelegramBot._parse_allowed_users("abc,,5") == {5}
+
+
+@pytest.mark.asyncio
+async def test_note_sender_records_candidate(monkeypatch, tmp_path):
+    """First-seen sender becomes the 'detected owner' candidate (persisted)."""
+    monkeypatch.setenv("AETHER_OWNER_CANDIDATES", str(tmp_path / "owners.json"))
+    bot = AetherTelegramBot(token="t", agent_id="a")
+    update = mk_update(text="hi", user_id=777)
+    bot._note_sender(update)
+    assert 777 in bot.owner_candidates
+    assert "first_seen" in bot.owner_candidates[777]
+    # persisted to disk
+    saved = (tmp_path / "owners.json").read_text()
+    assert '"id": 777' in saved
+
+
+@pytest.mark.asyncio
+async def test_note_sender_idempotent(monkeypatch, tmp_path):
+    monkeypatch.setenv("AETHER_OWNER_CANDIDATES", str(tmp_path / "owners.json"))
+    bot = AetherTelegramBot(token="t", agent_id="a")
+    bot._note_sender(mk_update(text="a", user_id=5))
+    bot._note_sender(mk_update(text="b", user_id=5))
+    assert list(bot.owner_candidates) == [5]
+
+
+@pytest.mark.asyncio
+async def test_cmd_sethome_persists_chat_id(monkeypatch, tmp_path):
+    monkeypatch.setenv("AETHER_ENV_FILE", str(tmp_path / ".env"))
+    written = {}
+
+    def fake_write_env(updates, path=None):
+        written.update(updates)
+
+    monkeypatch.setattr("aether.api.routes.setup.write_env", fake_write_env)
+    bot = AetherTelegramBot(token="t", agent_id="a")
+    update = SimpleNamespace(
+        effective_chat=SimpleNamespace(id=987),
+        message=SimpleNamespace(reply_text=AsyncMock()),
+    )
+    await bot._cmd_sethome(update, None)
+    assert written.get("TELEGRAM_CHAT_ID") == "987"
+    assert settings.TELEGRAM_CHAT_ID == "987"
+    text = update.message.reply_text.await_args.args[0]
+    assert "987" in text
 
 
 def test_chunk_text_small_unchanged():

@@ -119,6 +119,29 @@ class SetupRequest(BaseModel):
     action: str = "start"  # "start" | "stop"
 
 
+# ----------------------------------------------------------------- helpers
+def _allowed_user_ids() -> set:
+    ids: set = set()
+    for part in (settings.TELEGRAM_ALLOWED_USERS or "").split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.add(int(part))
+    return ids
+
+
+def _detected_owner(bot) -> Optional[dict]:
+    """First-seen sender recorded by the running bot (or an empty dict)."""
+    if bot is None:
+        return None
+    candidates = getattr(bot, "owner_candidates", None) or {}
+    if not candidates:
+        return None
+    try:
+        return min(candidates.values(), key=lambda c: c.get("first_seen", ""))
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
 # ----------------------------------------------------------------- responses
 def _status(app) -> dict:
     token = settings.TELEGRAM_BOT_TOKEN
@@ -131,6 +154,8 @@ def _status(app) -> dict:
     from aether.model.providers import get_provider
 
     provider = get_provider(settings.MODEL_PROVIDER)
+    allowed = _allowed_user_ids()
+    detected = _detected_owner(bot)
     return {
         "telegram_enabled": settings.TELEGRAM_ENABLED,
         "token_configured": bool(token),
@@ -149,7 +174,13 @@ def _status(app) -> dict:
         "provider_key_configured": bool(
             provider and (os.environ.get(provider.api_key_env) or settings.PROVIDER_API_KEY)
         ),
-        "allowlist_active": bool(settings.TELEGRAM_ALLOWED_USERS.strip()),
+        "allowlist_active": bool(allowed),
+        "allowlist_ids": sorted(allowed),
+        # first-seen sender = "detected owner" hint (allowed via allow_owner)
+        "detected_owner_id": detected["id"] if detected else None,
+        "detected_owner_name": detected["name"] if detected else None,
+        "detected_owner_username": detected["username"] if detected else None,
+        "detected_owner_allowed": bool(detected and detected["id"] in allowed),
     }
 
 
@@ -159,6 +190,233 @@ async def setup_providers():
     from aether.model.providers import provider_options
 
     return {"providers": provider_options()}
+
+
+class ProbeRequest(BaseModel):
+    provider: str = ""
+    api_key: str = ""
+    base_url: str = ""
+
+
+@router.post("/setup/probe")
+async def setup_probe(req: ProbeRequest):
+    """Live 'test connection' probe: verify a provider key and list its models.
+
+    Mirrors ``hermes doctor`` connectivity probes. Nothing is saved — the
+    console uses this to show a ✓/✗ verdict and a real model dropdown.
+    """
+    provider_id = (req.provider or settings.MODEL_PROVIDER or "ollama").lower().strip()
+    from aether.model.providers import fetch_provider_models, get_provider, provider_options
+
+    profile = get_provider(provider_id)
+    if profile is None:
+        known = ", ".join(p["id"] for p in provider_options())
+        return {"ok": False, "error": f"Unknown provider {provider_id!r}. Known: {known}"}
+
+    if profile.kind == "ollama":
+        info = await check_ollama(req.base_url or profile.base_url)
+        if not info["ok"]:
+            return {"ok": False, "error": info["detail"], "provider": provider_id, "models": []}
+        return {"ok": True, "provider": provider_id, "models": info["models"], "detail": "local Ollama reachable"}
+
+    if not profile.api_key_env:
+        from aether.model.providers import provider_options
+
+        models = await fetch_provider_models(provider_id, base_url=req.base_url or None)
+        return {"ok": True, "provider": provider_id, "models": models, "detail": "no key required"}
+
+    key = (req.api_key or "").strip() or os.environ.get(profile.api_key_env, "")
+    if not key:
+        return {
+            "ok": False,
+            "provider": provider_id,
+            "models": [],
+            "error": f"{profile.display_name} needs an API key — get one at {profile.signup_url or 'its console'}.",
+        }
+
+    models = await fetch_provider_models(
+        provider_id, api_key=key, base_url=req.base_url or None
+    )
+    if models:
+        return {"ok": True, "provider": provider_id, "models": models, "detail": f"{len(models)} models reachable"}
+    return {
+        "ok": False,
+        "provider": provider_id,
+        "models": [],
+        "error": "Key accepted but no model catalogue returned (check the key / base URL).",
+    }
+
+
+@router.get("/setup/diagnose")
+async def setup_diagnose(request: Request):
+    """Full health walk — the 'hermes doctor' equivalent for the console.
+
+    Each check is a row: {id, label, ok, detail}. No secrets are returned.
+    """
+    app = request.app
+    from aether.model.factory import effective_model_name
+    from aether.model.providers import fetch_provider_models, get_provider
+
+    checks: list = []
+    ok = True
+
+    # 1 — Telegram token valid (getMe)
+    token = settings.TELEGRAM_BOT_TOKEN
+    if token:
+        info = await check_telegram_token(token)
+        checks.append(
+            {
+                "id": "telegram",
+                "label": "Telegram token",
+                "ok": info["ok"],
+                "detail": (f"@{info['username']}" if info["ok"] else info["detail"]),
+            }
+        )
+        ok = ok and info["ok"]
+    else:
+        checks.append({"id": "telegram", "label": "Telegram token", "ok": False, "detail": "not set"})
+        ok = False
+
+    # 2 — bot polling
+    bot = getattr(app.state, "telegram_bot", None)
+    checks.append(
+        {"id": "bot", "label": "Bot polling", "ok": bot is not None, "detail": "running" if bot else "stopped"}
+    )
+    ok = ok and bot is not None
+
+    # 3 — provider + model reachable
+    provider = get_provider(settings.MODEL_PROVIDER)
+    if provider is None:
+        checks.append({"id": "provider", "label": "Model provider", "ok": False, "detail": "unknown provider"})
+        ok = False
+    else:
+        label = f"{provider.display_name} · {effective_model_name()}" if provider else settings.MODEL_PROVIDER
+        if provider.kind == "ollama":
+            info = await check_ollama(settings.OLLAMA_BASE_URL)
+            model_ok = info["ok"] and any(
+                (m == settings.OLLAMA_MODEL or m.startswith(settings.OLLAMA_MODEL + ":"))
+                for m in info.get("models", [])
+            )
+            checks.append(
+                {
+                    "id": "model",
+                    "label": f"Model · {effective_model_name()}",
+                    "ok": bool(info.get("ok") and info["models"]),
+                    "detail": (
+                        f"{len(info['models'])} local model(s)"
+                        if info.get("ok")
+                        else info.get("detail", "Ollama unreachable")
+                    ),
+                }
+            )
+            if model_ok is False and info.get("ok"):
+                checks.append(
+                    {"id": "model_present", "label": "Model pulled", "ok": False, "detail": "not in Ollama — run: ollama pull " + settings.OLLAMA_MODEL}
+                )
+                ok = False
+            elif model_ok:
+                checks.append({"id": "model_present", "label": "Model pulled", "ok": True, "detail": "ready"})
+            ok = ok and bool(info.get("ok"))
+        else:
+            key = os.environ.get(provider.api_key_env) or settings.PROVIDER_API_KEY
+            if not key:
+                checks.append(
+                    {
+                        "id": "model",
+                        "label": f"Model · {effective_model_name()}",
+                        "ok": False,
+                        "detail": f"missing API key ({provider.api_key_env})",
+                    }
+                )
+                ok = False
+            else:
+                models = await fetch_provider_models(settings.MODEL_PROVIDER)
+                checks.append(
+                    {
+                        "id": "model",
+                        "label": f"Model · {effective_model_name()}",
+                        "ok": bool(models),
+                        "detail": f"{len(models)} models reachable" if models else "no catalogue — check the key",
+                    }
+                )
+                ok = ok and bool(models)
+
+    # 4 — access control
+    allowed = _allowed_user_ids()
+    if settings.TELEGRAM_ALLOW_ALL_USERS:
+        checks.append({"id": "access", "label": "Access control", "ok": True, "detail": "allow all (dev)"})
+    elif allowed:
+        checks.append({"id": "access", "label": "Access control", "ok": True, "detail": f"allowlist ({len(allowed)} ids)"})
+    else:
+        checks.append({"id": "access", "label": "Access control", "ok": False, "detail": "no allowlist — add your Telegram id"})
+        ok = ok and False
+
+    # 5 — home channel (notifications)
+    if settings.TELEGRAM_CHAT_ID.strip():
+        checks.append({"id": "home", "label": "Home channel", "ok": True, "detail": "set (notifications will land)"})
+    else:
+        checks.append({"id": "home", "label": "Home channel", "ok": False, "detail": "unset — send /sethome from Telegram"})
+        ok = False
+
+    # 6 — detected owner (first sender)
+    detected = _detected_owner(bot)
+    if detected:
+        checks.append(
+            {
+                "id": "owner",
+                "label": "Detected sender",
+                "ok": detected["id"] in allowed,
+                "detail": (
+                    f"{detected['name'] or detected['username'] or detected['id']} · allowed"
+                    if detected["id"] in allowed
+                    else f"{detected['name'] or detected['username'] or detected['id']} · not allowed yet"
+                ),
+            }
+        )
+    else:
+        checks.append({"id": "owner", "label": "Detected sender", "ok": True, "detail": "none yet — message the bot once"})
+
+    return {"ok": ok and bool(token), "checks": checks}
+
+
+class AllowOwnerRequest(BaseModel):
+    user_id: int = 0
+
+
+@router.post("/setup/allow_owner")
+async def setup_allow_owner(request: Request, req: AllowOwnerRequest):
+    """One-click allow: add the detected owner to the Telegram allowlist."""
+    app = request.app
+    if not req.user_id:
+        return {"ok": False, "error": "user_id is required"}
+
+    allowed = _allowed_user_ids()
+    allowed.add(req.user_id)
+    merged = ",".join(str(i) for i in sorted(allowed))
+    write_env({"TELEGRAM_ALLOWED_USERS": merged})
+    settings.TELEGRAM_ALLOWED_USERS = merged
+
+    # Reflect in the live bot without a full restart.
+    bot = getattr(app.state, "telegram_bot", None)
+    if bot is not None:
+        try:
+            if bot.allowed_users is None:
+                bot.allowed_users = {req.user_id}
+            else:
+                bot.allowed_users.add(req.user_id)
+            if settings.TELEGRAM_ALLOW_ALL_USERS and bot.allow_all:
+                pass  # allow-all dev mode — no-op
+            elif settings.TELEGRAM_ALLOW_ALL_USERS:
+                bot.allow_all = True
+        except Exception:  # pragma: no cover - live update is best-effort
+            logger.warning("Could not update live bot allowlist", exc_info=True)
+
+    return {
+        "ok": True,
+        "allowed_users": sorted(allowed),
+        "allowlist_active": True,
+        "note": f"User {req.user_id} added to the allowlist.",
+    }
 
 
 _PAGE = """<!doctype html>
@@ -394,7 +652,7 @@ _PAGE = """<!doctype html>
    <!-- ============================ SETUP ============================ -->
    <section class="view" id="view-setup">
     <div class="steps">
-     <span class="step"><i>1</i><b>@BotFather</b> → new bot → copy token</span>
+     <span class="step"><i>1</i><b>@BotFather</b> → new bot → copy token (<a href="https://t.me/BotFather" target="_blank" style="color:var(--color-brand-500)">open ↗</a>)</span>
      <span class="step"><i>2</i>Fill form &amp; Save (once)</span>
      <span class="step"><i>3</i>Chat with the bot — done</span>
     </div>
@@ -415,6 +673,7 @@ _PAGE = """<!doctype html>
      <div class="btnrow">
       <button type="submit" class="btn primary">💾 Save &amp; Start Bot</button>
       <button type="button" class="btn danger" id="stop">🛑 Stop Bot</button>
+      <button type="button" class="btn" id="diag">🔍 Diagnose</button>
      </div>
     </form>
     <pre id="result">– idle –</pre>
@@ -518,6 +777,15 @@ _PAGE = """<!doctype html>
   const el=document.getElementById('result');
   el.textContent=JSON.stringify(j,null,2);el.className='ok';
   refresh();
+ };
+ document.getElementById('diag').onclick=async()=>{
+  const el=document.getElementById('result');
+  try{
+   const d=await (await fetch('/setup/diagnose')).json();
+   const rows=(d.checks||[]).map(c=>`${c.ok?'✓':'✗'} ${c.label} — ${c.detail||''}`).join('\\n');
+   el.textContent=rows||JSON.stringify(d,null,2);
+   el.className=d.ok?'ok':'err';
+  }catch(e){el.textContent='diagnose failed: '+e;el.className='err';}
  };
 
  /* theme toggle (9router-style, persisted) */
