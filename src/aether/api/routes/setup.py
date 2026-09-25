@@ -12,8 +12,7 @@ Infrastructure hooks kept at module scope so tests can redirect them:
 """
 import logging
 import os
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Request
@@ -21,38 +20,12 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from aether.config import settings
+from aether.envfile import env_file_path, load_env, write_env  # noqa: F401 (re-export)
 
 logger = logging.getLogger("aether.setup")
 router = APIRouter(tags=["setup"])
 
 _TELEGRAM_API = os.environ.get("AETHER_TELEGRAM_API_BASE", "https://api.telegram.org")
-
-
-# ---------------------------------------------------------------- env file
-def env_file_path() -> Path:
-    return Path(os.environ.get("AETHER_ENV_FILE", ".env"))
-
-
-def load_env(path: Path) -> Dict[str, str]:
-    data: Dict[str, str] = {}
-    if path.exists():
-        for line in path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            data[key.strip()] = value.strip()
-    return data
-
-
-def write_env(updates: Dict[str, str], path: Optional[Path] = None) -> Path:
-    """Merge ``updates`` into the env file, preserving unrelated keys."""
-    path = path or env_file_path()
-    data = load_env(path)
-    data.update({k: v for k, v in updates.items() if v is not None})
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(f"{k}={v}\n" for k, v in data.items()))
-    return path
 
 
 # --------------------------------------------------------------- validators

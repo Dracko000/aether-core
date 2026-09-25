@@ -9,6 +9,7 @@ Requires-Dist: pydantic-settings
 Requires-Dist: typer
 Requires-Dist: httpx
 Requires-Dist: aiosqlite
+Requires-Dist: python-telegram-bot>=21
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: pytest-asyncio; extra == "dev"

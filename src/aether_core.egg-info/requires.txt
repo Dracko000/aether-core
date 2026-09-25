@@ -6,6 +6,7 @@ pydantic-settings
 typer
 httpx
 aiosqlite
+python-telegram-bot>=21
 
 [dev]
 pytest
